@@ -1,0 +1,14 @@
+LICENSE
+README.md
+pyproject.toml
+setup.cfg
+xifa/__init__.py
+xifa/base.py
+xifa/gpcm.py
+xifa/grm.py
+xifa/mhrm.py
+xifa/utils.py
+xifa.egg-info/PKG-INFO
+xifa.egg-info/SOURCES.txt
+xifa.egg-info/dependency_links.txt
+xifa.egg-info/top_level.txt

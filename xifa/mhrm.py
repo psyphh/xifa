@@ -185,7 +185,7 @@ def cal_dparams_batch(batch_slices, params, y, eta3d, w, crf):
         y_batch, eta3d_batch, w_batch = y[batch_slice, ...], eta3d[:, batch_slice, ...], w[batch_slice],
         dparams_batch = cal_dcloss3d(
             params, y_batch, eta3d_batch, w_batch, crf)
-        dparams = {key: dparams[key] + dparams_batch[key] * (w[batch_slice].sum() / sum_w) for key in dparams}
+        dparams = {key: dparams[key] + dparams_batch[key] * (w_batch.sum() / sum_w) for key in dparams}
     return dparams
 
 
@@ -287,7 +287,7 @@ def fit_mhrm(lr,
     start = time.time()
     eta3d = jnp.repeat(eta[None, ...], chains, axis=0)
     if not isinstance(batch_size, type(None)):
-        n_cases = y.shape[1]
+        n_cases = y.shape[0]
         n_batches = jnp.ceil(n_cases / batch_size)
         batch_slices = [
             slice(batch_size * i, min(batch_size * (i + 1), n_cases), 1) for i in range(n_batches)]

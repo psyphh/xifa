@@ -9,6 +9,7 @@ from tqdm.auto import tqdm
 from .utils import cal_multinomial_logpmf
 
 
+
 @partial(jit, static_argnums=(4,))
 def cal_closs2d_i(params, y, eta2d, w, crf):
     closs_i = cal_floss2d_i(params, y, eta2d, w, crf) + cal_bloss2d_i(params, eta2d, w)
@@ -215,11 +216,12 @@ def ls_cor(lr, gain, params, dparams, masks, eta3d, w):
 
 
 @jit
-def rescale_params(params, masks):
+def rescale_params(params, masks, eta3d):
     scale = jnp.sqrt(params["phi"].diagonal())
     params["phi"] = params["phi"] / jnp.outer(scale, scale)
     params["phi"] = params["phi"] * masks["phi"] + jnp.diag(params["phi"].diagonal())
-    return params
+    eta3d = eta3d * (1.0 / scale)
+    return params, eta3d
 
 
 def update_params(lr, gain, cor_update,
@@ -230,11 +232,11 @@ def update_params(lr, gain, cor_update,
     if jnp.sum(masks["phi"]) >= 1.0:
         if cor_update == "heuristic":
             params["phi"] = cal_cov_eta3d(eta3d)
-            params = rescale_params(params, masks)
+            params, eta3d = rescale_params(params, masks, eta3d)
         else:
             if gain >= 1.:
                 params["phi"] = cal_cov_eta3d(eta3d)
-                params = rescale_params(params, masks)
+                params, eta3d = rescale_params(params, masks, eta3d)
             else:
                 dparams["phi"] = dparams["phi"] + dparams["phi"].T - jnp.diag(dparams["phi"].diagonal())
                 if cor_update == "gd_ls":
@@ -246,7 +248,7 @@ def update_params(lr, gain, cor_update,
                     pass
     else:
         pass
-    return params
+    return params, eta3d
 
 
 def fit_mhrm(lr,
@@ -272,7 +274,7 @@ def fit_mhrm(lr,
              w,
              crf):
     start = time.time()
-    eta3d = jnp.repeat(eta[None, ...], chains, axis=0)
+    eta3d = jnp.repeat(eta[None, ...], 1, axis=0)
     if not isinstance(batch_size, type(None)):
         key, subkey = jax.random.split(key)
         n_cases = y.shape[0]
@@ -288,6 +290,8 @@ def fit_mhrm(lr,
     if verbose:
         timer1, timer2 = set_timers(max_iter, discard_iter)
     for iter_ in range(1, max_iter + 1):
+        if iter_ == discard_iter + 1:
+            eta3d = jnp.repeat(eta3d, chains, axis=0)
         if iter_ > discard_iter:
             sa_count = (iter_ - discard_iter)
             gain = 1. / (sa_count ** sa_power)
@@ -301,11 +305,12 @@ def fit_mhrm(lr,
                 eta3d, y, w, params, crf)
             dparams = cal_dcloss3d(
                 params, y, eta3d, w, crf)
-            params = update_params(
+            params, eta3d = update_params(
                 lr, gain, cor_update,
                 params, dparams, masks,
                 eta3d, w)
             closs = cal_closs3d(params, y, eta3d, w, crf)
+
         else:
             sum_w = w.sum()
             closs = jnp.zeros(())
@@ -322,7 +327,7 @@ def fit_mhrm(lr,
                     eta3d_batch, y_batch, w_batch, params, crf)
                 dparams = cal_dcloss3d(
                     params, y_batch, eta3d_batch, w_batch, crf)
-                params = update_params(
+                params, eta3d_batch = update_params(
                     lr, gain, cor_update,
                     params, dparams, masks,
                     eta3d_batch, w_batch)
@@ -334,7 +339,7 @@ def fit_mhrm(lr,
                     eta3d, jax.ops.index[:, batch_idx, :], eta3d_batch)
         dparams = {key: params[key] - temp[key] for key in params.keys()}
         if cor_update == "heuristic":
-            dparams["phi"] = dparams["phi"] * lr * gain
+            dparams["phi"] = dparams["phi"] * 0
         delta_params = max(
             [jnp.max(
                 jnp.abs(

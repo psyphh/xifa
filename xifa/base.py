@@ -6,6 +6,7 @@ from .utils import cal_p12
 
 
 
+
 class Base():
     def __init__(self,
                  data, n_factors,
@@ -62,7 +63,7 @@ class Base():
             window_size=3,
             chains=1,
             warm_up=5,
-            jump_scale="optimal",
+            jump_scale="default",
             adaptive_jump=True,
             target_rate=.23,
             sa_power=1.,
@@ -73,8 +74,8 @@ class Base():
             batch_shuffle=True,
             params=None,
             masks=None):
-        if jump_scale == "optimal":
-            jump_scale = 2.4 / (self.info["n_factors"] ** .5)
+        if jump_scale == "default":
+            jump_scale = jnp.sqrt(2.4 / (self.info["n_factors"] ** .5))
         if isinstance(key, type(None)):
             key = self.key
         if isinstance(params, type(None)):
@@ -185,7 +186,6 @@ class Ordinal(Base):
 
     def init_params(self):
         self.params = {}
-
         def init_labda(p1, p2, n_factors):
             n_cats = p1.shape[1]
             k = jnp.arange(n_cats)
@@ -205,7 +205,8 @@ class Ordinal(Base):
                 self.stats["p2"],
                 self.info["n_factors"])
         else:
-            self.params["labda"] = 0.5 * self.masks["labda"]
+            self.params["labda"] = jax.random.uniform(
+                self.key, self.masks["labda"].shape) * self.masks["labda"]
         self.params["phi"] = jnp.eye(
             self.info["n_factors"],
             dtype=self.info["dtype"])

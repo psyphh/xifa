@@ -1,4 +1,6 @@
 dist/
+venv/
+.idea/
 xifa.egg-info
 *.pyc
 *.egg-info

@@ -75,7 +75,7 @@ class Base():
             params=None,
             masks=None):
         if jump_scale == "default":
-            jump_scale = jnp.sqrt(2.4 / (self.info["n_factors"] ** .5))
+            jump_scale = 2.4 / (self.info["n_factors"] ** .5)
         if isinstance(key, type(None)):
             key = self.key
         if isinstance(params, type(None)):

@@ -108,10 +108,10 @@ def cal_bloss3d(params, eta3d, w):
 
 
 def adjust_jump_scale(jump_scale, accept_rate, target_rate):
-    if accept_rate > (target_rate + .01):
-        jump_scale = jump_scale + .01
-    elif accept_rate < (target_rate - .01):
-        jump_scale = jump_scale - .01
+    if accept_rate > (target_rate + .005):
+        jump_scale = jump_scale + .005
+    elif accept_rate < (target_rate - .005):
+        jump_scale = jump_scale - .005
     else:
         pass
     return jump_scale

@@ -1,6 +1,7 @@
 .idea/
 dist/
 venv/
+archive/
 xifa/.DS_Store
 xifa/__pycache__/
 xifa.egg-info

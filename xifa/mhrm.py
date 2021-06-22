@@ -145,48 +145,37 @@ def update_timers(timer1, timer2, iter_, discard_iter, trace):
 
 @partial(jit, static_argnums=(7,))
 def conduct_mcmc(key, warm_up, jump_scale,
-                 eta, y, params, w, crf):
+                 eta3d, y, w, params, crf):
     accept_rate = 0
-    n_factors = eta.shape[-1]
+    n_factors = eta3d.shape[-1]
 
-    def sample_eta(i, value):
-        key, eta, accept_rate = value
+    def sample_eta3d(i, value):
+        key, eta3d, accept_rate = value
         key, subkey = jax.random.split(key)
-        eta_new = jax.random.multivariate_normal(
+        eta3d_new = jax.random.multivariate_normal(
             key=subkey,
-            mean=eta,
+            mean=eta3d,
             cov=jnp.diag(jnp.repeat(jump_scale ** 2, n_factors)),
-            shape=eta.shape[:-1])
+            shape=eta3d.shape[:-1])
         ratio = jnp.exp(
-            - cal_closs3d_i(params, y, eta_new, w, crf) + cal_closs3d_i(params, y, eta, w, crf))
+            - cal_closs3d_i(params, y, eta3d_new, w, crf) + cal_closs3d_i(params, y, eta3d, w, crf))
         key, subkey = jax.random.split(key)
         accept = jax.random.bernoulli(
             key=subkey,
             p=jnp.minimum(ratio, 1))
-        eta = jnp.where(
+        eta3d = jnp.where(
             jnp.repeat(
                 accept[..., None],
                 n_factors,
                 axis=-1),
-            x=eta_new,
-            y=eta)
+            x=eta3d_new,
+            y=eta3d)
         accept_rate = accept.mean()
-        return key, eta, accept_rate
+        return key, eta3d, accept_rate
 
-    key, eta, accept_rate = jax.lax.fori_loop(
-        0, warm_up + 1, sample_eta, (key, eta, accept_rate))
-    return eta, accept_rate
-
-
-def cal_dparams_batch(batch_slices, params, y, eta3d, w, crf):
-    sum_w = w.sum()
-    dparams = {key: jnp.zeros(value.shape) for key, value in params.items()}
-    for batch_slice in batch_slices:
-        y_batch, eta3d_batch, w_batch = y[batch_slice, ...], eta3d[:, batch_slice, ...], w[batch_slice],
-        dparams_batch = cal_dcloss3d(
-            params, y_batch, eta3d_batch, w_batch, crf)
-        dparams = {key: dparams[key] + dparams_batch[key] * (w_batch.sum() / sum_w) for key in dparams}
-    return dparams
+    key, eta3d, accept_rate = jax.lax.fori_loop(
+        0, warm_up + 1, sample_eta3d, (key, eta3d, accept_rate))
+    return eta3d, accept_rate
 
 
 @jit
@@ -230,20 +219,18 @@ def rescale_params(params, masks):
     scale = jnp.sqrt(params["phi"].diagonal())
     params["phi"] = params["phi"] / jnp.outer(scale, scale)
     params["phi"] = params["phi"] * masks["phi"] + jnp.diag(params["phi"].diagonal())
-    params["labda"] = params["labda"] * scale
     return params
 
 
 def update_params(lr, gain, cor_update,
                   params, dparams, masks,
-                  y, eta3d, w, crf):
+                  eta3d, w):
     params["nu"] = params["nu"] - lr * gain * dparams["nu"] * masks["nu"]
     params["labda"] = params["labda"] - lr * gain * dparams["labda"] * masks["labda"]
     if jnp.sum(masks["phi"]) >= 1.0:
         if cor_update == "heuristic":
             params["phi"] = cal_cov_eta3d(eta3d)
             params = rescale_params(params, masks)
-            dparams["phi"] = dparams["phi"] * .0
         else:
             if gain >= 1.:
                 params["phi"] = cal_cov_eta3d(eta3d)
@@ -253,14 +240,13 @@ def update_params(lr, gain, cor_update,
                 if cor_update == "gd_ls":
                     params["phi"], lr_armijo = ls_cor(
                         lr, gain, params, dparams, masks, eta3d, w)
-                    dparams["phi"] = dparams["phi"] * lr_armijo / lr
                 elif cor_update == "gd":
                     params["phi"] = params["phi"] - lr * gain * dparams["phi"] * masks["phi"]
                 else:
-                    dparams["phi"] = dparams["phi"] * .0
+                    pass
     else:
-        dparams["phi"] = dparams["phi"] * .0
-    return params, dparams
+        pass
+    return params
 
 
 def fit_mhrm(lr,
@@ -278,6 +264,7 @@ def fit_mhrm(lr,
              verbose,
              key,
              batch_size,
+             batch_shuffle,
              params,
              masks,
              y,
@@ -287,10 +274,14 @@ def fit_mhrm(lr,
     start = time.time()
     eta3d = jnp.repeat(eta[None, ...], chains, axis=0)
     if not isinstance(batch_size, type(None)):
+        key, subkey = jax.random.split(key)
         n_cases = y.shape[0]
-        n_batches = jnp.ceil(n_cases / batch_size)
+        n_batches = int(jnp.ceil(n_cases / batch_size))
         batch_slices = [
             slice(batch_size * i, min(batch_size * (i + 1), n_cases), 1) for i in range(n_batches)]
+        whole_idx = jnp.arange(n_cases)
+        if isinstance(batch_shuffle, type(None)):
+            batch_shuffle = True
     aparams = {key: jnp.zeros(value.shape) for key, value in params.items()}
     trace = {"accept_rate": [], "closs": [], "delta_params": []}
     converged = False
@@ -302,29 +293,52 @@ def fit_mhrm(lr,
             gain = 1. / (sa_count ** sa_power)
         else:
             gain = 1.
-        key, subkey = jax.random.split(key)
-        eta3d, accept_rate = conduct_mcmc(
-            subkey, warm_up, jump_scale,
-            eta3d, y, params, w, crf)
+        temp = params.copy()
         if isinstance(batch_size, type(None)):
+            key, subkey = jax.random.split(key)
+            eta3d, accept_rate = conduct_mcmc(
+                subkey, warm_up, jump_scale,
+                eta3d, y, w, params, crf)
             dparams = cal_dcloss3d(
                 params, y, eta3d, w, crf)
+            params = update_params(
+                lr, gain, cor_update,
+                params, dparams, masks,
+                eta3d, w)
+            closs = cal_closs3d(params, y, eta3d, w, crf)
         else:
-            dparams = cal_dparams_batch(
-                batch_slices, params,
-                y, eta3d, w, crf)
-        params, dparams = update_params(
-            lr, gain, cor_update,
-            params, dparams, masks,
-            y, eta3d, w, crf)
+            sum_w = w.sum()
+            closs = jnp.zeros(())
+            accept_rate = jnp.zeros(())
+            if batch_shuffle:
+                key, subkey = jax.random.split(key)
+                whole_idx = jax.random.permutation(subkey, whole_idx)
+            for batch_slice in batch_slices:
+                batch_idx = whole_idx[batch_slice]
+                y_batch, eta3d_batch, w_batch = y[batch_idx, ...], eta3d[:, batch_idx, :], w[batch_idx]
+                key, subkey = jax.random.split(key)
+                eta3d_batch, accept_rate_batch = conduct_mcmc(
+                    subkey, warm_up, jump_scale,
+                    eta3d_batch, y_batch, w_batch, params, crf)
+                dparams = cal_dcloss3d(
+                    params, y_batch, eta3d_batch, w_batch, crf)
+                params = update_params(
+                    lr, gain, cor_update,
+                    params, dparams, masks,
+                    eta3d_batch, w_batch)
+                closs_batch = cal_closs3d(params, y_batch, eta3d_batch, w_batch, crf)
+                prop_batch = w_batch.sum() / sum_w
+                closs = closs + prop_batch * closs_batch
+                accept_rate = accept_rate + prop_batch * accept_rate_batch
+                eta3d = jax.ops.index_update(
+                    eta3d, jax.ops.index[:, batch_idx, :], eta3d_batch)
+        dparams = {key: params[key] - temp[key] for key in params.keys()}
+        if cor_update == "heuristic":
+            dparams["phi"] = dparams["phi"] * lr * gain
         delta_params = max(
             [jnp.max(
                 jnp.abs(
-                    dparams[key] * masks[key]) * lr * gain) for key in dparams.keys()])
-        if iter_ > discard_iter:
-            aparams = {key: ((sa_count - 1.) / sa_count) * aparams[key] + (1. / sa_count) * params[key]
-                       for key, value in aparams.items()}
-        closs = cal_closs3d(params, y, eta3d, w, crf)
+                    dparams[key] * masks[key])) for key in dparams.keys()])
         trace["accept_rate"].append(accept_rate)
         trace["delta_params"].append(delta_params)
         trace["closs"].append(closs)
@@ -336,6 +350,8 @@ def fit_mhrm(lr,
                 jump_scale = adjust_jump_scale(
                     jump_scale, accept_rate, target_rate)
         else:
+            aparams = {key: ((sa_count - 1.) / sa_count) * aparams[key] + (1. / sa_count) * params[key]
+                       for key in aparams.keys()}
             if max(trace["delta_params"][-window_size:]) < tol:
                 converged = True
                 break

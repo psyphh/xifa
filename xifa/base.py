@@ -5,6 +5,7 @@ from .mhrm import fit_mhrm
 from .utils import cal_p12
 
 
+
 class Base():
     def __init__(self,
                  data, n_factors,
@@ -33,13 +34,14 @@ class Base():
             else:
                 w = weight
         del weight
+        if isinstance(key, type(None)):
+            key = jax.random.PRNGKey(0)
         if isinstance(init_frac, type(None)):
             p1, p2 = cal_p12(y, w)
         else:
-            if isinstance(key, type(None)):
-                key = jax.random.PRNGKey(0)
+            key, subkey = jax.random.split(key)
             init_idx = jax.random.choice(
-                key, a=n_cases,
+                subkey, a=n_cases,
                 shape=(int(n_cases * init_frac),),
                 replace=False)
             p1, p2 = cal_p12(y[init_idx, ...], w[init_idx, ...])
@@ -50,6 +52,7 @@ class Base():
         self.y, self.w = y, w
         self.info = info
         self.stats = stats
+        self.key = key
 
     def fit(self,
             lr=1.,
@@ -67,12 +70,13 @@ class Base():
             verbose=True,
             key=None,
             batch_size=None,
+            batch_shuffle=True,
             params=None,
             masks=None):
         if jump_scale == "optimal":
             jump_scale = 2.4 / (self.info["n_factors"] ** .5)
         if isinstance(key, type(None)):
-            key = jax.random.PRNGKey(0)
+            key = self.key
         if isinstance(params, type(None)):
             params = self.params
         if isinstance(masks, type(None)):
@@ -84,9 +88,10 @@ class Base():
             lr, max_iter, discard_iter,
             tol, window_size, chains, warm_up,
             jump_scale, adaptive_jump,
-            target_rate, sa_power,
-            cor_update, verbose, key,
-            batch_size, params, masks,
+            target_rate, sa_power, cor_update,
+            verbose, key,
+            batch_size, batch_shuffle,
+            params, masks,
             y, eta, w, crf)
         self.params = params
         self.aparams = aparams
@@ -101,6 +106,7 @@ class Base():
                 print("Not Converged after %.0f Iterations (%3.2f sec)." % (
                     self.trace["iter"], self.trace["time"]))
         return self
+
 
     def init_print(self):
         print("A", self.__class__.__name__, "Object is Initialized Successfully.")

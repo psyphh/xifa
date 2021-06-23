@@ -66,8 +66,9 @@ class Base():
             jump_scale="default",
             adaptive_jump=True,
             target_rate=.23,
+            jump_change=.01,
             sa_power=1.,
-            cor_update="gd",
+            corr_update="gd",
             verbose=True,
             key=None,
             batch_size=None,
@@ -75,7 +76,7 @@ class Base():
             params=None,
             masks=None):
         if jump_scale == "default":
-            jump_scale = 2.4 / (self.info["n_factors"] ** .5)
+            jump_scale = 2.4 / jnp.sqrt(self.info["n_factors"])
         if isinstance(key, type(None)):
             key = self.key
         if isinstance(params, type(None)):
@@ -89,7 +90,8 @@ class Base():
             lr, max_iter, discard_iter,
             tol, window_size, chains, warm_up,
             jump_scale, adaptive_jump,
-            target_rate, sa_power, cor_update,
+            target_rate, jump_change,
+            sa_power, corr_update,
             verbose, key,
             batch_size, batch_shuffle,
             params, masks,
@@ -122,31 +124,31 @@ class Ordinal(Base):
         self.masks = {}
         if not isinstance(
                 self.info["pattern"], type(None)):
-            if "labda" not in self.info["pattern"]:
-                self.info["pattern"]["labda"] = None
-            if "phi" not in self.info["pattern"]:
-                self.info["pattern"]["phi"] = None
+            if "loading" not in self.info["pattern"]:
+                self.info["pattern"]["loading"] = None
+            if "corr" not in self.info["pattern"]:
+                self.info["pattern"]["corr"] = None
         if isinstance(
                 self.info["pattern"], type(None)):
-            self.masks["labda"] = jnp.ones(
+            self.masks["loading"] = jnp.ones(
                 (self.info["n_items"],
                  self.info["n_factors"]),
                 dtype=self.info["dtype"])
         else:
             if isinstance(
-                    self.info["pattern"]["labda"], type(None)):
-                self.masks["labda"] = jnp.ones(
+                    self.info["pattern"]["loading"], type(None)):
+                self.masks["loading"] = jnp.ones(
                     (self.info["n_items"],
                      self.info["n_factors"]),
                     dtype=self.info["dtype"])
             else:
                 row_idx = []
                 col_idx = []
-                for key, values in self.info["pattern"]["labda"].items():
+                for key, values in self.info["pattern"]["loading"].items():
                     for value in values:
                         row_idx.append(value)
                         col_idx.append(key)
-                self.masks["labda"] = jax.ops.index_update(
+                self.masks["loading"] = jax.ops.index_update(
                     jnp.zeros(
                         (self.info["n_items"],
                          self.info["n_factors"]),
@@ -154,14 +156,14 @@ class Ordinal(Base):
                     (row_idx, col_idx), 1.)
         if isinstance(
                 self.info["pattern"], type(None)):
-            self.masks["phi"] = jnp.zeros(
+            self.masks["corr"] = jnp.zeros(
                 (self.info["n_factors"],
                  self.info["n_factors"]),
                 dtype=self.info["dtype"])
         else:
             if isinstance(
-                    self.info["pattern"]["phi"], type(None)):
-                self.masks["phi"] = jnp.ones(
+                    self.info["pattern"]["corr"], type(None)):
+                self.masks["corr"] = jnp.ones(
                     (self.info["n_factors"],
                      self.info["n_factors"]),
                     dtype=self.info["dtype"]) - jnp.eye(
@@ -170,14 +172,14 @@ class Ordinal(Base):
             else:
                 row_idx = []
                 col_idx = []
-                for key, values in self.info["pattern"]["phi"].items():
+                for key, values in self.info["pattern"]["corr"].items():
                     for value in values:
                         if (key != value):
                             row_idx.append(value)
                             col_idx.append(key)
                             col_idx.append(value)
                             row_idx.append(key)
-                self.masks["phi"] = jax.ops.index_update(
+                self.masks["corr"] = jax.ops.index_update(
                     jnp.zeros(
                         (self.info["n_factors"],
                          self.info["n_factors"]),
@@ -186,7 +188,7 @@ class Ordinal(Base):
 
     def init_params(self):
         self.params = {}
-        def init_labda(p1, p2, n_factors):
+        def init_loading(p1, p2, n_factors):
             n_cats = p1.shape[1]
             k = jnp.arange(n_cats)
             m1 = jnp.sum(p1 * k, axis=1)
@@ -195,23 +197,23 @@ class Ordinal(Base):
             d = jnp.sqrt(jnp.diagonal(s))
             r = s * jnp.outer(d, d)
             eigval, eigvec = jnp.linalg.eigh(r)
-            labda = eigvec[:, -n_factors:]
-            return labda
+            loading = eigvec[:, -n_factors:]
+            return loading
 
         if isinstance(
                 self.info["pattern"], type(None)):
-            self.params["labda"] = init_labda(
+            self.params["loading"] = init_loading(
                 self.stats["p1"],
                 self.stats["p2"],
                 self.info["n_factors"])
         else:
-            self.params["labda"] = jax.random.uniform(
-                self.key, self.masks["labda"].shape) * self.masks["labda"]
-        self.params["phi"] = jnp.eye(
+            self.params["loading"] = jax.random.uniform(
+                self.key, self.masks["loading"].shape) * self.masks["loading"]
+        self.params["corr"] = jnp.eye(
             self.info["n_factors"],
             dtype=self.info["dtype"])
 
     def init_eta(self):
-        eta = self.y.argmax(axis=-1) @ self.params["labda"]
+        eta = self.y.argmax(axis=-1) @ self.params["loading"]
         eta = (eta - eta.mean(axis=0)) / eta.std(axis=0)
         self.eta = eta

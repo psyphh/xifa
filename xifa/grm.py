@@ -5,6 +5,7 @@ from jax import jit
 from .base import Ordinal
 
 
+
 class GRM(Ordinal):
     def __init__(self,
                  data, n_factors,
@@ -29,7 +30,7 @@ class GRM(Ordinal):
     def init_crf(self):
         @jit
         def crf(eta, params):
-            tau = -(eta @ params["labda"].T)[..., None] + params["nu"]
+            tau = -(eta @ params["loading"].T)[..., None] + params["intercept"]
             cr_prob = jnp.diff(
                 jax.scipy.special.expit(tau),
                 axis=-1)
@@ -39,7 +40,7 @@ class GRM(Ordinal):
 
     def init_masks(self):
         super().init_masks()
-        self.masks["nu"] = jnp.hstack(
+        self.masks["intercept"] = jnp.hstack(
             [jnp.full(
                 shape=(self.info["n_items"], 1),
                 fill_value=0.,
@@ -55,16 +56,16 @@ class GRM(Ordinal):
                     dtype=self.info["dtype"])])
 
     def init_params(self):
-        def init_nu(p1):
+        def init_intercept(p1):
             n_items = p1.shape[0]
-            nu = jnp.hstack(
+            intercept = jnp.hstack(
                 [jnp.full((n_items, 1), -jnp.inf),
                  jax.scipy.special.logit(
                      jnp.cumsum(p1, axis=1)[:, :-1]),
                  jnp.full((n_items, 1), jnp.inf)])
-            return nu
+            return intercept
 
         super().init_params()
-        self.params["nu"] = init_nu(
+        self.params["intercept"] = init_intercept(
             self.stats["p1"])
         del self.stats

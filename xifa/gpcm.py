@@ -5,6 +5,8 @@ from jax import jit
 from .base import Ordinal
 
 
+
+
 class GPCM(Ordinal):
     def __init__(self,
                  data, n_factors,
@@ -29,8 +31,8 @@ class GPCM(Ordinal):
     def init_crf(self):
         @jit
         def crf(eta, params):
-            n_cats = params["nu"].shape[1]
-            logit = (eta @ params["labda"].T)[..., None] * jnp.arange(n_cats) + jnp.cumsum(params["nu"], axis=1)
+            n_cats = params["intercept"].shape[1]
+            logit = (eta @ params["loading"].T)[..., None] * jnp.arange(n_cats) + jnp.cumsum(params["intercept"], axis=1)
             cr_prob = jnp.exp(logit)
             cr_prob = cr_prob / jnp.sum(cr_prob, axis=2)[..., None]
             return cr_prob
@@ -39,7 +41,7 @@ class GPCM(Ordinal):
 
     def init_masks(self):
         super().init_masks()
-        self.masks["nu"] = jnp.hstack(
+        self.masks["intercept"] = jnp.hstack(
             [jnp.full(
                 shape=(self.info["n_items"], 1),
                 fill_value=0.,
@@ -51,17 +53,17 @@ class GPCM(Ordinal):
                     dtype=self.info["dtype"])])
 
     def init_params(self):
-        def init_nu(p1):
+        def init_intercept(p1):
             n_items = p1.shape[0]
-            nu = jax.scipy.special.logit(
+            intercept = jax.scipy.special.logit(
                 jnp.cumsum(p1, axis=1)[:, :-1])
-            nu = jnp.hstack(
+            intercept = jnp.hstack(
                 [jnp.full((n_items, 1), 0.),
-                 nu[:, 0:1],
-                 jnp.diff(nu, axis=1)])
-            return nu
+                 intercept[:, 0:1],
+                 jnp.diff(intercept, axis=1)])
+            return intercept
 
         super().init_params()
-        self.params["nu"] = init_nu(
+        self.params["intercept"] = init_intercept(
             self.stats["p1"])
         del self.stats

@@ -5,6 +5,6 @@
 
 In the current version (0.0.1), `xifa` supports ordinal data IFA with graded response model (GRM; [Semejima, 1969](https://link.springer.com/article/10.1007%2FBF03372160)) and generalized partial credit model (GPCM; [Muraki, 1992](https://doi.org/10.1177/014662169201600206)). 
 
-For a tutorial, please see [Big Five 50 Items Example](http://colab.research.google.com/github/psyphh/xifa/blob/master/examples/ipip50.ipynb).
+For a tutorial, please see [IPIP 50 Items Example](http://colab.research.google.com/github/psyphh/xifa/blob/master/examples/ipip50.ipynb).
 
 

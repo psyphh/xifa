@@ -116,20 +116,20 @@ def adjust_jump_std(jump_std, accept_rate, target_rate, jump_change):
     return jump_std
 
 
-def set_timers(max_iter, discard_iter):
+def set_timers(max_iters, discard_iters):
     timer1 = tqdm(
-        total=discard_iter,
+        total=discard_iters,
         disable=False,
         position=0)
     timer2 = tqdm(
-        total=max_iter - discard_iter,
+        total=max_iters - discard_iters,
         disable=False,
         position=1)
     return timer1, timer2
 
 
-def update_timers(timer1, timer2, n_iter, discard_iter, trace):
-    if n_iter <= discard_iter:
+def update_timers(timer1, timer2, n_iter, discard_iters, trace):
+    if n_iter <= discard_iters:
         timer1.set_postfix(
             {"Accept Rate": jnp.round(trace["accept_rate"][-1], 2),
              'Loss': jnp.round(trace["closs"][-1], 2)})
@@ -253,8 +253,8 @@ def update_params(lr, gain,
 
 
 def fit_mhrm(lr,
-             max_iter,
-             discard_iter,
+             max_iters,
+             discard_iters,
              tol,
              window,
              chains,
@@ -291,13 +291,13 @@ def fit_mhrm(lr,
     gain = 1.
     converged = False
     if verbose:
-        timer1, timer2 = set_timers(max_iter, discard_iter)
-    for n_iter in range(1, max_iter + 1):
-        if n_iter == discard_iter + 1:
+        timer1, timer2 = set_timers(max_iters, discard_iters)
+    for n_iters in range(1, max_iters + 1):
+        if n_iters == discard_iters + 1:
             stage = 2
             eta3d = jnp.repeat(eta3d, chains, axis=0)
         if stage == 2:
-            sa_count = (n_iter - discard_iter)
+            sa_count = (n_iters - discard_iters)
             gain = 1. / (sa_count ** gain_decay)
         temp = params.copy()
         if isinstance(batch_size, type(None)):
@@ -347,7 +347,7 @@ def fit_mhrm(lr,
         trace["closs"].append(closs)
         if verbose:
             update_timers(
-                timer1, timer2, n_iter, discard_iter, trace)
+                timer1, timer2, n_iters, discard_iters, trace)
         if stage == 1:
             jump_std = adjust_jump_std(
                 jump_std, accept_rate, target_rate, jump_change)
@@ -359,7 +359,7 @@ def fit_mhrm(lr,
                 break
     end = time.time()
     trace["jump_std"] = jump_std
-    trace["n_iter"] = n_iter
+    trace["n_iters"] = n_iters
     trace["converged"] = converged
     trace["time"] = end - start
     eta = jnp.mean(eta3d, axis=0)

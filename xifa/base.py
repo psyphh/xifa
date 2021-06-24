@@ -5,14 +5,13 @@ from .mhrm import fit_mhrm
 from .utils import cal_p12
 
 
-
-
 class Base():
     def __init__(self,
                  data, n_factors,
-                 pattern=None,
+                 patterns=None,
                  weight=None,
                  init_frac=None,
+                 verbose=None,
                  key=None):
         if not isinstance(data, type(jnp.array)):
             data = jnp.array(data)
@@ -23,6 +22,15 @@ class Base():
         y = jax.nn.one_hot(
             data, n_cats, dtype=dtype)
         del data
+        if isinstance(patterns, type(None)):
+            analysis = "exploratory"
+            pattern = {"loading": None, "corr": None}
+        else:
+            analysis = "confirmatory"
+            if "loading" not in patterns:
+                patterns["loading"] = None
+            if "corr" not in patterns:
+                patterns["corr"] = None
         if isinstance(weight, type(None)):
             w = jnp.full(
                 shape=(n_cases,),
@@ -35,6 +43,8 @@ class Base():
             else:
                 w = weight
         del weight
+        if isinstance(verbose, type(None)):
+            verbose = True
         if isinstance(key, type(None)):
             key = jax.random.PRNGKey(0)
         if isinstance(init_frac, type(None)):
@@ -42,41 +52,49 @@ class Base():
         else:
             key, subkey = jax.random.split(key)
             init_idx = jax.random.choice(
-                subkey, a=n_cases,
+                key=subkey,
+                a=n_cases,
                 shape=(int(n_cases * init_frac),),
                 replace=False)
-            p1, p2 = cal_p12(y[init_idx, ...], w[init_idx, ...])
+            p1, p2 = cal_p12(
+                y[init_idx, ...],
+                w[init_idx, ...])
         stats = {"p1": p1, "p2": p2}
-        info = {"n_cases": n_cases, "n_factors": n_factors,
-                "n_items": n_items, "n_cats": n_cats,
-                "dtype": dtype, "pattern": pattern}
+        info = {"n_cases": n_cases,
+                "n_items": n_items,
+                "n_cats": n_cats,
+                "n_factors": n_factors,
+                "analysis": analysis,
+                "patterns": patterns,
+                "dtype": dtype}
         self.y, self.w = y, w
         self.info = info
         self.stats = stats
-        self.key = key
+        self.key, self.verbose = key, verbose
 
     def fit(self,
             lr=1.,
             max_iter=500,
             discard_iter=200,
             tol=10 ** (-4),
-            window_size=3,
+            window=3,
             chains=1,
             warm_up=5,
-            jump_scale="default",
-            adaptive_jump=True,
-            target_rate=.23,
+            jump_std="default",
             jump_change=.01,
-            sa_power=1.,
+            target_rate=.23,
+            gain_decay=1.,
             corr_update="gd",
-            verbose=True,
-            key=None,
             batch_size=None,
-            batch_shuffle=True,
+            batch_shuffle=None,
+            verbose=None,
+            key=None,
             params=None,
             masks=None):
-        if jump_scale == "default":
-            jump_scale = 2.4 / jnp.sqrt(self.info["n_factors"])
+        if jump_std == "default":
+            jump_std = 2.4 / jnp.sqrt(self.info["n_factors"])
+        if isinstance(verbose, type(None)):
+            verbose = self.verbose
         if isinstance(key, type(None)):
             key = self.key
         if isinstance(params, type(None)):
@@ -86,57 +104,65 @@ class Base():
         y, w = self.y, self.w
         eta = self.eta
         crf = self.crf
-        params, aparams, eta3d, eta, trace = fit_mhrm(
-            lr, max_iter, discard_iter,
-            tol, window_size, chains, warm_up,
-            jump_scale, adaptive_jump,
-            target_rate, jump_change,
-            sa_power, corr_update,
-            verbose, key,
-            batch_size, batch_shuffle,
-            params, masks,
-            y, eta, w, crf)
+        params, aparams, eta, trace = fit_mhrm(
+            lr=lr,
+            max_iter=max_iter,
+            discard_iter=discard_iter,
+            tol=tol,
+            window=window,
+            chains=chains,
+            warm_up=warm_up,
+            jump_std=jump_std,
+            jump_change=jump_change,
+            target_rate=target_rate,
+            gain_decay=gain_decay,
+            corr_update=corr_update,
+            batch_size=batch_size,
+            batch_shuffle=batch_shuffle,
+            verbose=verbose,
+            key=key,
+            params=params,
+            masks=masks,
+            y=y,
+            eta=eta,
+            w=w,
+            crf=crf)
         self.params = params
         self.aparams = aparams
-        self.eta3d = eta3d
         self.eta = eta
         self.trace = trace
         if verbose:
-            if self.trace["iter"] < max_iter:
+            if self.trace["n_iter"] < max_iter:
                 print("Converged after %.0f Iterations (%3.2f sec)." % (
-                    self.trace["iter"], self.trace["time"]))
+                    self.trace["n_iter"], self.trace["time"]))
             else:
                 print("Not Converged after %.0f Iterations (%3.2f sec)." % (
-                    self.trace["iter"], self.trace["time"]))
+                    self.trace["n_iter"], self.trace["time"]))
         return self
 
-
-    def init_print(self):
-        print("A", self.__class__.__name__, "Object is Initialized Successfully.")
-        print(" + Number of Cases: %.0f" % (self.info["n_cases"]))
-        print(" + Number of Items: %.0f" % (self.info["n_items"]))
-        print(" + Number of Factors: %.0f" % (self.info["n_factors"]))
-        print(" + Number of Categories: %.0f" % (self.info["n_cats"]))
+    def print_init(self):
+        if self.verbose:
+            print("A", self.__class__.__name__,
+                  "Object is Initialized for",
+                  self.info["analysis"].capitalize(),
+                  "Analysis.")
+            print(" + Number of Cases: %.0f" % (self.info["n_cases"]))
+            print(" + Number of Items: %.0f" % (self.info["n_items"]))
+            print(" + Number of Factors: %.0f" % (self.info["n_factors"]))
+            print(" + Number of Categories: %.0f" % (self.info["n_cats"]))
 
 
 class Ordinal(Base):
     def init_masks(self):
         self.masks = {}
-        if not isinstance(
-                self.info["pattern"], type(None)):
-            if "loading" not in self.info["pattern"]:
-                self.info["pattern"]["loading"] = None
-            if "corr" not in self.info["pattern"]:
-                self.info["pattern"]["corr"] = None
-        if isinstance(
-                self.info["pattern"], type(None)):
+        if self.info["analysis"] == "exploratory":
             self.masks["loading"] = jnp.ones(
                 (self.info["n_items"],
                  self.info["n_factors"]),
                 dtype=self.info["dtype"])
         else:
             if isinstance(
-                    self.info["pattern"]["loading"], type(None)):
+                    self.info["patterns"]["loading"], type(None)):
                 self.masks["loading"] = jnp.ones(
                     (self.info["n_items"],
                      self.info["n_factors"]),
@@ -144,7 +170,7 @@ class Ordinal(Base):
             else:
                 row_idx = []
                 col_idx = []
-                for key, values in self.info["pattern"]["loading"].items():
+                for key, values in self.info["patterns"]["loading"].items():
                     for value in values:
                         row_idx.append(value)
                         col_idx.append(key)
@@ -154,15 +180,14 @@ class Ordinal(Base):
                          self.info["n_factors"]),
                         dtype=self.info["dtype"]),
                     (row_idx, col_idx), 1.)
-        if isinstance(
-                self.info["pattern"], type(None)):
+        if self.info["analysis"] == "exploratory":
             self.masks["corr"] = jnp.zeros(
                 (self.info["n_factors"],
                  self.info["n_factors"]),
                 dtype=self.info["dtype"])
         else:
             if isinstance(
-                    self.info["pattern"]["corr"], type(None)):
+                    self.info["patterns"]["corr"], type(None)):
                 self.masks["corr"] = jnp.ones(
                     (self.info["n_factors"],
                      self.info["n_factors"]),
@@ -172,7 +197,7 @@ class Ordinal(Base):
             else:
                 row_idx = []
                 col_idx = []
-                for key, values in self.info["pattern"]["corr"].items():
+                for key, values in self.info["patterns"]["corr"].items():
                     for value in values:
                         if (key != value):
                             row_idx.append(value)
@@ -188,6 +213,7 @@ class Ordinal(Base):
 
     def init_params(self):
         self.params = {}
+
         def init_loading(p1, p2, n_factors):
             n_cats = p1.shape[1]
             k = jnp.arange(n_cats)
@@ -200,8 +226,7 @@ class Ordinal(Base):
             loading = eigvec[:, -n_factors:]
             return loading
 
-        if isinstance(
-                self.info["pattern"], type(None)):
+        if self.info["analysis"] == "exploratory":
             self.params["loading"] = init_loading(
                 self.stats["p1"],
                 self.stats["p2"],

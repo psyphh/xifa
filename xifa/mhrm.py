@@ -9,8 +9,6 @@ from tqdm.auto import tqdm
 from .utils import cal_multinomial_logpmf
 
 
-
-
 @partial(jit, static_argnums=(4,))
 def cal_closs2d_i(params, y, eta2d, w, crf):
     closs_i = cal_floss2d_i(params, y, eta2d, w, crf) + cal_bloss2d_i(params, eta2d, w)
@@ -108,14 +106,14 @@ def cal_bloss3d(params, eta3d, w):
     return bloss
 
 
-def adjust_jump_scale(jump_scale, accept_rate, target_rate, jump_change):
+def adjust_jump_std(jump_std, accept_rate, target_rate, jump_change):
     if accept_rate > (target_rate + .01):
-        jump_scale = jump_scale + jump_change
+        jump_std = jump_std + jump_change
     elif accept_rate < (target_rate - .01):
-        jump_scale = jump_scale - jump_change
+        jump_std = jump_std - jump_change
     else:
         pass
-    return jump_scale
+    return jump_std
 
 
 def set_timers(max_iter, discard_iter):
@@ -130,8 +128,8 @@ def set_timers(max_iter, discard_iter):
     return timer1, timer2
 
 
-def update_timers(timer1, timer2, iter_, discard_iter, trace):
-    if iter_ <= discard_iter:
+def update_timers(timer1, timer2, n_iter, discard_iter, trace):
+    if n_iter <= discard_iter:
         timer1.set_postfix(
             {"Accept Rate": jnp.round(trace["accept_rate"][-1], 2),
              'Loss': jnp.round(trace["closs"][-1], 2)})
@@ -146,7 +144,7 @@ def update_timers(timer1, timer2, iter_, discard_iter, trace):
 
 
 @partial(jit, static_argnums=(7,))
-def conduct_mcmc(key, warm_up, jump_scale,
+def conduct_mcmc(key, warm_up, jump_std,
                  eta3d, y, w, params, crf):
     accept_rate = 0
     n_factors = eta3d.shape[-1]
@@ -157,7 +155,7 @@ def conduct_mcmc(key, warm_up, jump_scale,
         eta3d_new = jax.random.multivariate_normal(
             key=subkey,
             mean=eta3d,
-            cov=jnp.diag(jnp.repeat(jump_scale ** 2, n_factors)),
+            cov=jnp.diag(jnp.repeat(jump_std ** 2, n_factors)),
             shape=eta3d.shape[:-1])
         ratio = jnp.exp(
             - cal_closs3d_i(params, y, eta3d_new, w, crf) + cal_closs3d_i(params, y, eta3d, w, crf))
@@ -217,7 +215,7 @@ def ls_corr(lr, gain, params, dparams, masks, eta3d, w):
 
 
 @jit
-def rescale_params(params, masks):
+def project_corr(params, masks):
     scale = jnp.sqrt(params["corr"].diagonal())
     params["corr"] = params["corr"] / jnp.outer(scale, scale)
     params["corr"] = params["corr"] * masks["corr"] + jnp.diag(params["corr"].diagonal())
@@ -233,12 +231,12 @@ def update_params(lr, gain,
     if jnp.sum(masks["corr"]) >= 1.0:
         if stage == 1:
             params["corr"] = cal_cov_eta3d(eta3d)
-            params = rescale_params(params, masks)
+            params = project_corr(params, masks)
         else:
             if corr_update == "empirical":
                 corr = params["corr"]
                 params["corr"] = cal_cov_eta3d(eta3d)
-                params = rescale_params(params, masks)
+                params = project_corr(params, masks)
                 params["corr"] = ((1 - lr * gain) * corr) + (lr * gain * params["corr"])
             else:
                 dparams["corr"] = dparams["corr"] + dparams["corr"].T - jnp.diag(dparams["corr"].diagonal())
@@ -258,19 +256,18 @@ def fit_mhrm(lr,
              max_iter,
              discard_iter,
              tol,
-             window_size,
+             window,
              chains,
              warm_up,
-             jump_scale,
-             adaptive_jump,
-             target_rate,
+             jump_std,
              jump_change,
-             sa_power,
+             target_rate,
+             gain_decay,
              corr_update,
-             verbose,
-             key,
              batch_size,
              batch_shuffle,
+             verbose,
+             key,
              params,
              masks,
              y,
@@ -295,18 +292,18 @@ def fit_mhrm(lr,
     converged = False
     if verbose:
         timer1, timer2 = set_timers(max_iter, discard_iter)
-    for iter_ in range(1, max_iter + 1):
-        if iter_ == discard_iter + 1:
+    for n_iter in range(1, max_iter + 1):
+        if n_iter == discard_iter + 1:
             stage = 2
             eta3d = jnp.repeat(eta3d, chains, axis=0)
         if stage == 2:
-            sa_count = (iter_ - discard_iter)
-            gain = 1. / (sa_count ** sa_power)
+            sa_count = (n_iter - discard_iter)
+            gain = 1. / (sa_count ** gain_decay)
         temp = params.copy()
         if isinstance(batch_size, type(None)):
             key, subkey = jax.random.split(key)
             eta3d, accept_rate = conduct_mcmc(
-                subkey, warm_up, jump_scale,
+                subkey, warm_up, jump_std,
                 eta3d, y, w, params, crf)
             dparams = cal_dcloss3d(
                 params, y, eta3d, w, crf)
@@ -326,7 +323,7 @@ def fit_mhrm(lr,
                 y_batch, eta3d_batch, w_batch = y[batch_idx, ...], eta3d[:, batch_idx, :], w[batch_idx]
                 key, subkey = jax.random.split(key)
                 eta3d_batch, accept_rate_batch = conduct_mcmc(
-                    subkey, warm_up, jump_scale,
+                    subkey, warm_up, jump_std,
                     eta3d_batch, y_batch, w_batch, params, crf)
                 dparams = cal_dcloss3d(
                     params, y_batch, eta3d_batch, w_batch, crf)
@@ -350,21 +347,20 @@ def fit_mhrm(lr,
         trace["closs"].append(closs)
         if verbose:
             update_timers(
-                timer1, timer2, iter_, discard_iter, trace)
+                timer1, timer2, n_iter, discard_iter, trace)
         if stage == 1:
-            if adaptive_jump:
-                jump_scale = adjust_jump_scale(
-                    jump_scale, accept_rate, target_rate, jump_change)
+            jump_std = adjust_jump_std(
+                jump_std, accept_rate, target_rate, jump_change)
         else:
             aparams = {key: ((sa_count - 1.) / sa_count) * aparams[key] + (1. / sa_count) * params[key]
                        for key in aparams.keys()}
-            if max(trace["delta_params"][-window_size:]) < tol:
+            if max(trace["delta_params"][-window:]) < tol:
                 converged = True
                 break
     end = time.time()
-    trace["jump_scale"] = jump_scale
-    trace["iter"] = iter_
+    trace["jump_std"] = jump_std
+    trace["n_iter"] = n_iter
     trace["converged"] = converged
     trace["time"] = end - start
     eta = jnp.mean(eta3d, axis=0)
-    return params, aparams, eta3d, eta, trace
+    return params, aparams, eta, trace

@@ -5,34 +5,34 @@ from jax import jit
 from .base import Ordinal
 
 
-
-
 class GPCM(Ordinal):
     def __init__(self,
                  data, n_factors,
-                 pattern=None,
+                 patterns=None,
                  weight=None,
                  init_frac=None,
-                 key=None,
-                 verbose=None):
+                 verbose=None,
+                 key=None):
         super().__init__(
-            data, n_factors,
-            pattern, weight,
-            init_frac, key)
+            data=data,
+            n_factors=n_factors,
+            patterns=patterns,
+            weight=weight,
+            init_frac=init_frac,
+            verbose=verbose,
+            key=key)
         self.init_crf()
         self.init_masks()
         self.init_params()
         self.init_eta()
-        if isinstance(verbose, type(None)):
-            verbose = True
-        if verbose:
-            self.init_print()
+        self.print_init()
 
     def init_crf(self):
         @jit
         def crf(eta, params):
             n_cats = params["intercept"].shape[1]
-            logit = (eta @ params["loading"].T)[..., None] * jnp.arange(n_cats) + jnp.cumsum(params["intercept"], axis=1)
+            logit = (eta @ params["loading"].T)[..., None] * jnp.arange(n_cats) + jnp.cumsum(params["intercept"],
+                                                                                             axis=1)
             cr_prob = jnp.exp(logit)
             cr_prob = cr_prob / jnp.sum(cr_prob, axis=2)[..., None]
             return cr_prob

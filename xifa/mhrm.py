@@ -365,5 +365,3 @@ def fit_mhrm(lr,
     eta = jnp.mean(eta3d, axis=0)
     return params, aparams, eta, trace
 
-
-

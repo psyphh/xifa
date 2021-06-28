@@ -116,20 +116,20 @@ def adjust_jump_std(jump_std, accept_rate, target_rate, jump_change):
     return jump_std
 
 
-def set_timers(max_iters, discard_iters):
+def set_timers(max_iters, stem_iters):
     timer1 = tqdm(
-        total=discard_iters,
+        total=stem_iters,
         disable=False,
         position=0)
     timer2 = tqdm(
-        total=max_iters - discard_iters,
+        total=max_iters - stem_iters,
         disable=False,
         position=1)
     return timer1, timer2
 
 
-def update_timers(timer1, timer2, n_iter, discard_iters, trace):
-    if n_iter <= discard_iters:
+def update_timers(timer1, timer2, n_iter, stem_iters, trace):
+    if n_iter <= stem_iters:
         timer1.set_postfix(
             {"Accept Rate": jnp.round(trace["accept_rate"][-1], 2),
              'Loss': jnp.round(trace["closs"][-1], 2)})
@@ -254,7 +254,7 @@ def update_params(lr, gain,
 
 def fit_mhrm(lr,
              max_iters,
-             discard_iters,
+             stem_iters,
              tol,
              window,
              chains,
@@ -286,18 +286,18 @@ def fit_mhrm(lr,
         if isinstance(batch_shuffle, type(None)):
             batch_shuffle = True
     aparams = {key: jnp.zeros(value.shape) for key, value in params.items()}
-    trace = {"accept_rate": [], "closs": [], "delta_params": []}
+    trace = {"accept_rate": [], "closs": [], "change_param": []}
     stage = 1
     gain = 1.
-    converged = False
+    is_converged = False
     if verbose:
-        timer1, timer2 = set_timers(max_iters, discard_iters)
+        timer1, timer2 = set_timers(max_iters, stem_iters)
     for n_iters in range(1, max_iters + 1):
-        if n_iters == discard_iters + 1:
+        if n_iters == stem_iters + 1:
             stage = 2
             eta3d = jnp.repeat(eta3d, chains, axis=0)
         if stage == 2:
-            sa_count = (n_iters - discard_iters)
+            sa_count = (n_iters - stem_iters)
             gain = 1. / (sa_count ** gain_decay)
         temp = params.copy()
         if isinstance(batch_size, type(None)):
@@ -338,30 +338,31 @@ def fit_mhrm(lr,
         eta3d = eta3d / jnp.sqrt(params["corr"].diagonal())
         closs = cal_closs3d(params, y, eta3d, w, crf)
         dparams = {key: params[key] - temp[key] for key in params.keys()}
-        delta_params = max(
+        change_param = max(
             [jnp.max(
                 jnp.abs(
                     dparams[key] * masks[key])) for key in dparams.keys()])
         trace["accept_rate"].append(accept_rate)
-        trace["delta_params"].append(delta_params)
+        trace["change_param"].append(change_param)
         trace["closs"].append(closs)
         if verbose:
             update_timers(
-                timer1, timer2, n_iters, discard_iters, trace)
+                timer1, timer2, n_iters, stem_iters, trace)
         if stage == 1:
             jump_std = adjust_jump_std(
                 jump_std, accept_rate, target_rate, jump_change)
         else:
             aparams = {key: ((sa_count - 1.) / sa_count) * aparams[key] + (1. / sa_count) * params[key]
                        for key in aparams.keys()}
-            if max(trace["delta_params"][-window:]) < tol:
-                converged = True
+            if max(trace["change_param"][-window:]) < tol:
+                is_converged = True
                 break
     end = time.time()
+    fit_time = end - start
     trace["jump_std"] = jump_std
     trace["n_iters"] = n_iters
-    trace["converged"] = converged
-    trace["time"] = end - start
+    trace["is_converged"] = is_converged
+    trace["fit_time"] = fit_time
     eta = jnp.mean(eta3d, axis=0)
     return params, aparams, eta, trace
 

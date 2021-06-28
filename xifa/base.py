@@ -75,7 +75,7 @@ class Base():
     def fit(self,
             lr=1.,
             max_iters=500,
-            discard_iters=200,
+            stem_iters=200,
             tol=10 ** (-4),
             window=3,
             chains=1,
@@ -107,7 +107,7 @@ class Base():
         params, aparams, eta, trace = fit_mhrm(
             lr=lr,
             max_iters=max_iters,
-            discard_iters=discard_iters,
+            stem_iters=stem_iters,
             tol=tol,
             window=window,
             chains=chains,
@@ -134,10 +134,10 @@ class Base():
         if verbose:
             if self.trace["n_iters"] < max_iters:
                 print("Converged after %.0f Iterations (%3.2f sec)." % (
-                    self.trace["n_iters"], self.trace["time"]))
+                    self.trace["n_iters"], self.trace["fit_time"]))
             else:
                 print("Not Converged after %.0f Iterations (%3.2f sec)." % (
-                    self.trace["n_iters"], self.trace["time"]))
+                    self.trace["n_iters"], self.trace["fit_time"]))
         return self
 
     def print_init(self):

@@ -6,13 +6,14 @@ from .base import Ordinal
 
 
 class GPCM(Ordinal):
-    def __init__(self,
-                 data, n_factors,
-                 patterns=None,
-                 freq=None,
-                 init_frac=None,
-                 verbose=None,
-                 key=None):
+    def __init__(
+            self,
+            data, n_factors,
+            patterns=None,
+            freq=None,
+            init_frac=None,
+            verbose=None,
+            key=None):
         super().__init__(
             data=data,
             n_factors=n_factors,
@@ -47,23 +48,23 @@ class GPCM(Ordinal):
             params=None,
             masks=None):
         super().fit(lr=lr,
-                  max_iters=max_iters,
-                  stem_iters=stem_iters,
-                  tol=tol,
-                  window=window,
-                  chains=chains,
-                  warm_up=warm_up,
-                  jump_std=jump_std,
-                  jump_change=jump_change,
-                  target_rate=target_rate,
-                  gain_decay=gain_decay,
-                  corr_update=corr_update,
-                  batch_size=batch_size,
-                  batch_shuffle=batch_shuffle,
-                  verbose=verbose,
-                  key=key,
-                  params=params,
-                  masks=masks)
+                    max_iters=max_iters,
+                    stem_iters=stem_iters,
+                    tol=tol,
+                    window=window,
+                    chains=chains,
+                    warm_up=warm_up,
+                    jump_std=jump_std,
+                    jump_change=jump_change,
+                    target_rate=target_rate,
+                    gain_decay=gain_decay,
+                    corr_update=corr_update,
+                    batch_size=batch_size,
+                    batch_shuffle=batch_shuffle,
+                    verbose=verbose,
+                    key=key,
+                    params=params,
+                    masks=masks)
 
     def init_crf(self):
         @jit

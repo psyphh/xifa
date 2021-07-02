@@ -10,36 +10,42 @@ from .utils import cal_multinomial_logpmf
 
 
 @partial(jit, static_argnums=(4,))
-def cal_closs2d_i(params, y, eta2d, freq, crf):
+def cal_closs2d_i(
+        params, y, eta2d, freq, crf):
     closs_i = cal_floss2d_i(params, y, eta2d, freq, crf) + cal_bloss2d_i(params, eta2d, freq)
     return closs_i
 
 
 @partial(jit, static_argnums=(4,))
-def cal_closs2d(params, y, eta2d, freq, crf):
+def cal_closs2d(
+        params, y, eta2d, freq, crf):
     closs = cal_closs2d_i(params, y, eta2d, freq, crf).sum() / freq.sum()
     return closs
 
 
 @partial(jit, static_argnums=(4,))
-def cal_dcloss2d(params, y, eta2d, freq, crf):
+def cal_dcloss2d(
+        params, y, eta2d, freq, crf):
     dcloss = grad(cal_closs2d, argnums=0)(params, y, eta2d, freq, crf)
     return dcloss
 
 
 @partial(jit, static_argnums=(4,))
-def cal_dcloss2d_i(params, y, eta2d, freq, crf):
+def cal_dcloss2d_i(
+        params, y, eta2d, freq, crf):
     dcloss_i = jax.jacfwd(cal_closs2d_i, argnums=0)(params, y, eta2d, freq, crf)
     return dcloss_i
 
 
 @partial(jit, static_argnums=(4,))
-def cal_d2closs2d(params, y, eta2d, freq, crf):
+def cal_d2closs2d(
+        params, y, eta2d, freq, crf):
     return jax.jacfwd(cal_dcloss2d, argnums=0)(params, y, eta2d, freq, crf)
 
 
 @partial(jit, static_argnums=(4,))
-def cal_closs3d_i(params, y, eta3d, freq, crf):
+def cal_closs3d_i(
+        params, y, eta3d, freq, crf):
     closs_i = vmap(cal_closs2d_i,
                    in_axes=(None, None, 0, None, None))(
         params, y, eta3d, freq, crf)
@@ -47,19 +53,22 @@ def cal_closs3d_i(params, y, eta3d, freq, crf):
 
 
 @partial(jit, static_argnums=(4,))
-def cal_closs3d(params, y, eta3d, freq, crf):
+def cal_closs3d(
+        params, y, eta3d, freq, crf):
     closs = cal_closs3d_i(params, y, eta3d, freq, crf).mean(axis=0).sum() / freq.sum()
     return closs
 
 
 @partial(jit, static_argnums=(4,))
-def cal_dcloss3d(params, y, eta3d, freq, crf):
+def cal_dcloss3d(
+        params, y, eta3d, freq, crf):
     dcloss = grad(cal_closs3d, argnums=0)(params, y, eta3d, freq, crf)
     return dcloss
 
 
 @partial(jit, static_argnums=(4,))
-def cal_dcloss3d_i(params, y, eta3d, freq, crf):
+def cal_dcloss3d_i(
+        params, y, eta3d, freq, crf):
     dcloss_i = vmap(cal_dcloss2d_i,
                     in_axes=(None, None, 0, None, None))(
         params, y, eta3d, freq, crf)
@@ -67,13 +76,15 @@ def cal_dcloss3d_i(params, y, eta3d, freq, crf):
 
 
 @partial(jit, static_argnums=(4,))
-def cal_d2closs3d(params, y, eta3d, freq, crf):
+def cal_d2closs3d(
+        params, y, eta3d, freq, crf):
     d2closs = jax.jacfwd(cal_dcloss3d, argnums=0)(params, y, eta3d, freq, crf)
     return d2closs
 
 
 @partial(jit, static_argnums=(4,))
-def cal_floss2d_i(params, y, eta2d, freq, crf):
+def cal_floss2d_i(
+        params, y, eta2d, freq, crf):
     floss_i = -jnp.sum(
         cal_multinomial_logpmf(
             k=y,
@@ -83,7 +94,8 @@ def cal_floss2d_i(params, y, eta2d, freq, crf):
 
 
 @jit
-def cal_bloss2d_i(params, eta2d, freq):
+def cal_bloss2d_i(
+        params, eta2d, freq):
     n_factors = eta2d.shape[-1]
     bloss_i = - jax.scipy.stats.multivariate_normal.logpdf(
         x=eta2d,
@@ -93,7 +105,8 @@ def cal_bloss2d_i(params, eta2d, freq):
 
 
 @jit
-def cal_bloss3d_i(params, eta3d, freq):
+def cal_bloss3d_i(
+        params, eta3d, freq):
     bloss_i = vmap(cal_bloss2d_i,
                    in_axes=(None, 0, None))(
         params, eta3d, freq)
@@ -101,12 +114,14 @@ def cal_bloss3d_i(params, eta3d, freq):
 
 
 @jit
-def cal_bloss3d(params, eta3d, freq):
+def cal_bloss3d(
+        params, eta3d, freq):
     bloss = cal_bloss3d_i(params, eta3d, freq).mean(axis=0).sum() / freq.sum()
     return bloss
 
 
-def adjust_jump_std(jump_std, accept_rate, target_rate, jump_change):
+def adjust_jump_std(
+        jump_std, accept_rate, target_rate, jump_change):
     if accept_rate > (target_rate + .01):
         jump_std = jump_std + jump_change
     elif accept_rate < (target_rate - .01):
@@ -116,7 +131,8 @@ def adjust_jump_std(jump_std, accept_rate, target_rate, jump_change):
     return jump_std
 
 
-def set_timers(max_iters, stem_iters):
+def set_timers(
+        max_iters, stem_iters):
     timer1 = tqdm(
         total=stem_iters,
         disable=False,
@@ -128,7 +144,8 @@ def set_timers(max_iters, stem_iters):
     return timer1, timer2
 
 
-def update_timers(timer1, timer2, n_iter, stem_iters, trace):
+def update_timers(
+        timer1, timer2, n_iter, stem_iters, trace):
     if n_iter <= stem_iters:
         timer1.set_postfix(
             {"Accept Rate": jnp.round(trace["accept_rate"][-1], 2),
@@ -144,8 +161,9 @@ def update_timers(timer1, timer2, n_iter, stem_iters, trace):
 
 
 @partial(jit, static_argnums=(7,))
-def conduct_mcmc(key, warm_up, jump_std,
-                 eta3d, y, freq, params, crf):
+def conduct_mcmc(
+        key, warm_up, jump_std,
+        eta3d, y, freq, params, crf):
     accept_rate = 0
     n_factors = eta3d.shape[-1]
 
@@ -188,7 +206,8 @@ def cal_cov_eta3d(eta3d):
 
 
 @jit
-def ls_corr(lr, gain, params, dparams, masks, eta3d, freq):
+def ls_corr(
+        lr, gain, params, dparams, masks, eta3d, freq):
     c_armijo = 0.001
     d_armijo = 1.0
     lr_armijo = 0
@@ -215,17 +234,19 @@ def ls_corr(lr, gain, params, dparams, masks, eta3d, freq):
 
 
 @jit
-def project_corr(params, masks):
+def project_corr(
+        params, masks):
     scale = jnp.sqrt(params["corr"].diagonal())
     params["corr"] = params["corr"] / jnp.outer(scale, scale)
     params["corr"] = params["corr"] * masks["corr"] + jnp.diag(params["corr"].diagonal())
     return params
 
 
-def update_params(lr, gain,
-                  stage, corr_update,
-                  params, dparams, masks,
-                  eta3d, freq):
+def update_params(
+        lr, gain,
+        stage, corr_update,
+        params, dparams, masks,
+        eta3d, freq):
     params["intercept"] = params["intercept"] - lr * gain * dparams["intercept"] * masks["intercept"]
     params["loading"] = params["loading"] - lr * gain * dparams["loading"] * masks["loading"]
     if jnp.sum(masks["corr"]) >= 1.0:
@@ -252,28 +273,29 @@ def update_params(lr, gain,
     return params
 
 
-def fit_mhrm(lr,
-             max_iters,
-             stem_iters,
-             tol,
-             window,
-             chains,
-             warm_up,
-             jump_std,
-             jump_change,
-             target_rate,
-             gain_decay,
-             corr_update,
-             batch_size,
-             batch_shuffle,
-             verbose,
-             key,
-             params,
-             masks,
-             y,
-             eta,
-             freq,
-             crf):
+def fit_mhrm(
+        lr,
+        max_iters,
+        stem_iters,
+        tol,
+        window,
+        chains,
+        warm_up,
+        jump_std,
+        jump_change,
+        target_rate,
+        gain_decay,
+        corr_update,
+        batch_size,
+        batch_shuffle,
+        verbose,
+        key,
+        params,
+        masks,
+        y,
+        eta,
+        freq,
+        crf):
     start = time.time()
     eta3d = jnp.repeat(eta[None, ...], 1, axis=0)
     if not isinstance(batch_size, type(None)):
@@ -370,5 +392,3 @@ def fit_mhrm(lr,
     trace["is_nan"] = is_nan
     trace["fit_time"] = fit_time
     return params, aparams, eta, trace
-
-

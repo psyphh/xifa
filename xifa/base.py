@@ -5,11 +5,12 @@ from .mhrm import fit_mhrm
 from .utils import cal_p12
 
 
+
 class Base():
     def __init__(self,
                  data, n_factors,
                  patterns=None,
-                 weight=None,
+                 freq=None,
                  init_frac=None,
                  verbose=None,
                  key=None):
@@ -31,24 +32,21 @@ class Base():
                 patterns["loading"] = None
             if "corr" not in patterns:
                 patterns["corr"] = None
-        if isinstance(weight, type(None)):
-            w = jnp.full(
+        if isinstance(freq, type(None)):
+            freq = jnp.full(
                 shape=(n_cases,),
                 fill_value=1.,
                 dtype=dtype)
         else:
-            if not isinstance(weight, type(jnp.array)):
-                w = jnp.array(
-                    weight, dtype=dtype)
-            else:
-                w = weight
-        del weight
+            if not isinstance(freq, type(jnp.array)):
+                freq = jnp.array(
+                    freq, dtype=dtype)
         if isinstance(verbose, type(None)):
             verbose = True
         if isinstance(key, type(None)):
             key = jax.random.PRNGKey(0)
         if isinstance(init_frac, type(None)):
-            p1, p2 = cal_p12(y, w)
+            p1, p2 = cal_p12(y, freq)
         else:
             key, subkey = jax.random.split(key)
             init_idx = jax.random.choice(
@@ -58,7 +56,7 @@ class Base():
                 replace=False)
             p1, p2 = cal_p12(
                 y[init_idx, ...],
-                w[init_idx, ...])
+                freq[init_idx, ...])
         stats = {"p1": p1, "p2": p2}
         info = {"n_cases": n_cases,
                 "n_items": n_items,
@@ -67,78 +65,11 @@ class Base():
                 "analysis": analysis,
                 "patterns": patterns,
                 "dtype": dtype}
-        self.y, self.w = y, w
+        self.y, self.freq = y, freq
         self.info = info
         self.stats = stats
         self.key, self.verbose = key, verbose
 
-    def fit(self,
-            lr=1.,
-            max_iters=500,
-            stem_iters=200,
-            tol=10 ** (-4),
-            window=3,
-            chains=1,
-            warm_up=5,
-            jump_std="default",
-            jump_change=.01,
-            target_rate=.23,
-            gain_decay=1.,
-            corr_update="gd",
-            batch_size=None,
-            batch_shuffle=None,
-            verbose=None,
-            key=None,
-            params=None,
-            masks=None):
-        if jump_std == "default":
-            jump_std = 2.4 / jnp.sqrt(self.info["n_factors"])
-        if isinstance(verbose, type(None)):
-            verbose = self.verbose
-        if isinstance(key, type(None)):
-            key = self.key
-        if isinstance(params, type(None)):
-            params = self.params
-        if isinstance(masks, type(None)):
-            masks = self.masks
-        y, w = self.y, self.w
-        eta = self.eta
-        crf = self.crf
-        params, aparams, eta, trace = fit_mhrm(
-            lr=lr,
-            max_iters=max_iters,
-            stem_iters=stem_iters,
-            tol=tol,
-            window=window,
-            chains=chains,
-            warm_up=warm_up,
-            jump_std=jump_std,
-            jump_change=jump_change,
-            target_rate=target_rate,
-            gain_decay=gain_decay,
-            corr_update=corr_update,
-            batch_size=batch_size,
-            batch_shuffle=batch_shuffle,
-            verbose=verbose,
-            key=key,
-            params=params,
-            masks=masks,
-            y=y,
-            eta=eta,
-            w=w,
-            crf=crf)
-        self.params = params
-        self.aparams = aparams
-        self.eta = eta
-        self.trace = trace
-        if verbose:
-            if self.trace["n_iters"] < max_iters:
-                print("Converged after %.0f Iterations (%3.2f sec)." % (
-                    self.trace["n_iters"], self.trace["fit_time"]))
-            else:
-                print("Not Converged after %.0f Iterations (%3.2f sec)." % (
-                    self.trace["n_iters"], self.trace["fit_time"]))
-        return self
 
     def print_init(self):
         if self.verbose:
@@ -242,3 +173,83 @@ class Ordinal(Base):
         eta = self.y.argmax(axis=-1) @ self.params["loading"]
         eta = (eta - eta.mean(axis=0)) / eta.std(axis=0)
         self.eta = eta
+
+
+    def fit(self,
+            lr=1.,
+            max_iters=500,
+            stem_iters=200,
+            tol=10 ** (-4),
+            window=3,
+            chains=1,
+            warm_up=5,
+            jump_std="default",
+            jump_change=.01,
+            target_rate=.23,
+            gain_decay=1.,
+            corr_update="gd",
+            batch_size=None,
+            batch_shuffle=None,
+            verbose=None,
+            key=None,
+            params=None,
+            masks=None):
+        if jump_std == "default":
+            jump_std = 2.4 / jnp.sqrt(self.info["n_factors"])
+        if isinstance(verbose, type(None)):
+            verbose = self.verbose
+        if isinstance(key, type(None)):
+            key = self.key
+        if isinstance(params, type(None)):
+            params = self.params
+        if isinstance(masks, type(None)):
+            masks = self.masks
+        y, freq = self.y, self.freq
+        eta = self.eta
+        crf = self.crf
+        params, aparams, eta, trace = fit_mhrm(
+            lr=lr,
+            max_iters=max_iters,
+            stem_iters=stem_iters,
+            tol=tol,
+            window=window,
+            chains=chains,
+            warm_up=warm_up,
+            jump_std=jump_std,
+            jump_change=jump_change,
+            target_rate=target_rate,
+            gain_decay=gain_decay,
+            corr_update=corr_update,
+            batch_size=batch_size,
+            batch_shuffle=batch_shuffle,
+            verbose=verbose,
+            key=key,
+            params=params,
+            masks=masks,
+            y=y,
+            eta=eta,
+            freq=freq,
+            crf=crf)
+        self.params = params
+        self.aparams = aparams
+        self.eta = eta
+        self.trace = trace
+        if verbose:
+            if self.trace["is_nan"]:
+                print("`NaN` Occurs after %.0f Iterations (%3.2f sec)." % (
+                        self.trace["n_iters"], self.trace["fit_time"]))
+                print("Possible Solutions Include:")
+                print("+ Try Other `key`.")
+                print("+ Try Smaller `lr`.")
+                print("+ Set `corr_update='empirical'`.")
+            else:
+                if self.trace["is_converged"]:
+                    print("Converged after %.0f Iterations (%3.2f sec)." % (
+                        self.trace["n_iters"], self.trace["fit_time"]))
+                else:
+                    print("Not Converged after %.0f Iterations (%3.2f sec)." % (
+                        self.trace["n_iters"], self.trace["fit_time"]))
+                    print("Possible Solutions Include:")
+                    print("+ Try Larger `max_iters`.")
+                    print("+ Try Larger `chains`.")
+        return self

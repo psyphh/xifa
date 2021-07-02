@@ -18,10 +18,10 @@ def cal_normal_logpdf(x, mean, cov):
 
 
 @jit
-def cal_p12(y, w):
-    yw = y * w[..., None, None]
-    f1 = jnp.sum(yw, axis=0) + 1.
+def cal_p12(y, freq):
+    y_freq = y * freq[..., None, None]
+    f1 = jnp.sum(y_freq, axis=0) + 1.
     p1 = f1 / jnp.sum(f1, axis=1)[..., None]
-    f2 = vmap(lambda x_i: yw.T @ x_i, in_axes=(1,))(y)
+    f2 = vmap(lambda x_i: y_freq.T @ x_i, in_axes=(1,))(y)
     p2 = f2 / jnp.sum(f2, axis=(1, 3))[:, None, :, None]
     return p1, p2

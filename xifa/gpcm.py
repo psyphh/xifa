@@ -9,7 +9,7 @@ class GPCM(Ordinal):
     def __init__(self,
                  data, n_factors,
                  patterns=None,
-                 weight=None,
+                 freq=None,
                  init_frac=None,
                  verbose=None,
                  key=None):
@@ -17,7 +17,7 @@ class GPCM(Ordinal):
             data=data,
             n_factors=n_factors,
             patterns=patterns,
-            weight=weight,
+            freq=freq,
             init_frac=init_frac,
             verbose=verbose,
             key=key)
@@ -26,6 +26,44 @@ class GPCM(Ordinal):
         self.init_params()
         self.init_eta()
         self.print_init()
+
+    def fit(self,
+            lr=1.,
+            max_iters=500,
+            stem_iters=200,
+            tol=10 ** (-4),
+            window=3,
+            chains=1,
+            warm_up=5,
+            jump_std="default",
+            jump_change=.01,
+            target_rate=.23,
+            gain_decay=1.,
+            corr_update="gd",
+            batch_size=None,
+            batch_shuffle=None,
+            verbose=None,
+            key=None,
+            params=None,
+            masks=None):
+        super().fit(lr=lr,
+                  max_iters=max_iters,
+                  stem_iters=stem_iters,
+                  tol=tol,
+                  window=window,
+                  chains=chains,
+                  warm_up=warm_up,
+                  jump_std=jump_std,
+                  jump_change=jump_change,
+                  target_rate=target_rate,
+                  gain_decay=gain_decay,
+                  corr_update=corr_update,
+                  batch_size=batch_size,
+                  batch_shuffle=batch_shuffle,
+                  verbose=verbose,
+                  key=key,
+                  params=params,
+                  masks=masks)
 
     def init_crf(self):
         @jit

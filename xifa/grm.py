@@ -37,11 +37,12 @@ class GRM(Ordinal):
             (1) masks[`intercept`] is a mask matrix for intercept matrix;
             (2) masks[`loading`] is a mask matrix for loading matrix;
             (3) masks[`corr`] is a mask matrix for correlation matrix.
+            If an element in `masks` is zero, its corresponding element in `params` will not be updated in estimation.
         trace (list):
-            A `list` to record the fitting history when implementing `fit()`.
+            A `list` to record the fitting history made by `fit()` method.
             `trace` is only available after using `fit()` method.
         eta (jax.numpy.ndarray):
-            A 2D array for `eta` values with shape `(n_cases, n_factors)`.
+            A 2D array with shape `(n_cases, n_factors)` for predicted `eta` values .
             The values of `eta` elements are calculated by averaging values of MH samples across chains.
             `eta` is only available after using `fit()` method.
         aparams (list):

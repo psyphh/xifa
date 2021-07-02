@@ -14,15 +14,15 @@ class GRM(Ordinal):
 
     Attributes:
         y (jax.numpy.ndarray):
-            A 3D one-hot encoding data array with shape `(n_cases, n_item, n_cats)` for IFA.
+            A 3D array with shape `(n_cases, n_item, n_cats)` to represent one-hot encoding data for IFA.
         freq (jax.numpy.ndarray):
-            A 1D frequency array with shape `(n_cases,)` for rows of data.
+            A 1D array with shape `(n_cases,)` to represent frequencies for rows of data.
         verbose (bool):
             A `bool` to specify whether model information should be printed after successful initialization.
         key (numpy.ndarray-like):
             A pseudorandom number generator (PRNG) key for random number generation.
         info (list):
-            A `list` for representing model information.
+            A `list` to represent model information.
         crf (funtion):
             A `function` to calculate category responses.
         params (list):

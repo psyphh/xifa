@@ -34,12 +34,21 @@ class GRM(Ordinal):
         masks (list):
             A `list` for model parameter masks.
             `masks` includes three arrays with only 0/1 value:
-            (1) masks[`intercept`] is a mask matrix for intercept matrix;
-            (2) masks[`loading`] is a mask matrix for loading matrix;
-            (3) masks[`corr`] is a mask matrix for correlation matrix.
+            (1) `masks['intercept']` is a mask matrix for intercept matrix;
+            (2) `masks['loading']` is a mask matrix for loading matrix;
+            (3) `masks['corr']` is a mask matrix for correlation matrix.
             If an element in `masks` is zero, its corresponding element in `params` will not be updated in estimation.
         trace (list):
             A `list` to record the fitting history made by `fit()` method.
+            `trace` includes eight elements:
+            (1) `trace['accept_rate']` is a `list` storing acceptance rates in Metropolis-Hasting sampling.
+            (2) `trace['closs']` is a `list` storing complete data loss values (negative complete data log-likelihood).
+            (3) `trace['change_param']` is a float for the maximal change in parameters.
+            (4) `trace['jump_std']` is a `list` storing values of jumping standard deviations used in Metropolis-Hasting sampling.
+            (5) `trace['n_iters']` is a `float` for the number of iterations.
+            (6) `trace['is_converged']` is a `bool` to indicate whether the algorithm is converged.
+            (7) `trace['is_converged']` is a `bool` to indicate whether the algorithm results in NaN values.
+            (8) `trace['fit_time']` is a `float` for the fitting time.
             `trace` is only available after using `fit()` method.
         eta (jax.numpy.ndarray):
             A 2D array with shape `(n_cases, n_factors)` for predicted `eta` values .
@@ -50,9 +59,9 @@ class GRM(Ordinal):
             A `list` for averaged model parameter matrices.
             The averaging is with respect to all iterations in the stochastic approximation stage.
             `aparams` includes three parameter arrays:
-            (1) `aparams[`intercept`]` is an intercept matrix with shape `(n_items, n_cats + 1)`;
-            (2) `aparams[`loading`]` is a loading matrix with shape `(n_items, n_factors)`;
-            (3) `aparams[`corr`]` is a correlation matrix with shape `(n_factors, n_factors)`.
+            (1) `aparams['intercept']` is an intercept matrix with shape `(n_items, n_cats + 1)`;
+            (2) `aparams['loading']` is a loading matrix with shape `(n_items, n_factors)`;
+            (3) `aparams['corr']` is a correlation matrix with shape `(n_factors, n_factors)`.
             `aparams` is only available after using `fit()` method.
     """
 
@@ -108,24 +117,84 @@ class GRM(Ordinal):
         self.print_init()
 
     def fit(self,
-            lr=1.,
-            max_iters=500,
-            stem_iters=200,
-            tol=10 ** (-4),
-            window=3,
-            chains=1,
-            warm_up=5,
-            jump_std="default",
-            jump_change=.01,
-            target_rate=.23,
-            gain_decay=1.,
-            corr_update="gd",
+            lr=None,
+            max_iters=None,
+            stem_iters=None,
+            tol=None,
+            window=None,
+            chains=None,
+            warm_up=None,
+            jump_std=None,
+            jump_change=None,
+            target_rate=None,
+            gain_decay=None,
+            corr_update=None,
             batch_size=None,
-            batch_shuffle=None,
+            cycling=None,
             verbose=None,
             key=None,
             params=None,
             masks=None):
+        """Fit Method for GRM Class
+        Args:
+            lr (float):
+                A `float` for learning rate (or) step size for gradient descent.
+                By default, `lr` is `1.0`.
+            max_iters (int):
+                An `int` for the maximal number of iterations.
+                By default, `max_iters` is `500`.
+            stem_iters (int):
+                An `int` for the number of iterations for the stochastic expectation-maximization (StEM) algorithm.
+                StEM is used in the first stage of fitting.
+                Note that `stem_iters` is also considered in `max_iters`.
+                By default, `stem_iters` is `200`.
+            tol (float):
+                A `float` for the convergence criterion in the second stage of fitting.
+                The second stage stops when the maximal value of changes in parameters is smaller than `tol` within window size defined in `window`.
+                By default, `tol` is `10**(-4)`.
+            window (int):
+                An `int` for the window size to check convergence.
+                By default, `window` is `10**(-3)`.
+            chains (int):
+                An `int` to specify how many independent chains are used in Metropolis-Hasting sampling.
+                By default, `chains` is `1`.
+            warm_up (int):
+                An `int` for the number of warm-up iterations in Metropolis-Hasting sampling.
+                In other words, only the `warm_up`(th) sample is considered as a valid Metropolis-Hasting sample.
+                By default, `warm_up` is `5`.
+            jump_std (float):
+                A `float` for the jumping standard deviation for Metropolis-Hasting sampling.
+                By default, `jump_std` is set as `2.4 /sqrt(n_factors)`.
+            jump_change (float):
+                A `float` to specify the change value for adaptive `jump_std`.
+                By default, `jump_change` is `.01`.
+            target_rate (float):
+                A `float` for optimal value of acceptance rate for Metropolis-Hasting sampling.
+                By default, `target_rate` is `.23`.
+            gain_decay (float):
+                A `float` to specify the decay level of gain in Robins-Monro update.
+                The gain is calculated by `gain = 1 / (n_iters**gain_decay)`.
+                By default, `gain_decay` is `1.0`.
+            corr_update (str):
+                A `str` to specify the method for updating correlation matrix of latent factors.
+                Its value must be one of `['gd', 'gd_ls', 'empirical']`.
+                By default, `corr_update` is `gd`.
+            batch_size (int):
+                An `int` to specify the batch size if mini-batch stochastic gradient descent is used.
+                By default, `batch_size` is `n_cases` which result in usual gradient descent method.
+            cycling (bool):
+                A `bool` to specify whether we should cycle batches over the whole data set.
+                By default, `cycling` is `True`.
+            verbose (bool, optional):
+                A `bool` to specify whether fitting summary and progress bar should be printed after successful initialization.
+                By default, `verbose` is the value specified in `__init__()`.
+            key (numpy.ndarray-like, optional):
+                A pseudorandom number generator (PRNG) key for random number generation.
+                It can be generated by using `jax.random.PRNGKey(seed)`, where seed is an integer.
+                In the initialization stage, `key` is only used if `init_frac` is specified.
+                However, `key` will be largely used in `fit()` method (`key` can be also specified as an argument of `fit()`).
+                By default, `key`  is the value specified in `__init__()`.
+        """
         super().fit(
             lr=lr,
             max_iters=max_iters,
@@ -140,7 +209,7 @@ class GRM(Ordinal):
             gain_decay=gain_decay,
             corr_update=corr_update,
             batch_size=batch_size,
-            batch_shuffle=batch_shuffle,
+            cycling=cycling,
             verbose=verbose,
             key=key,
             params=params,

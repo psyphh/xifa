@@ -176,26 +176,46 @@ class Ordinal(Base):
 
 
     def fit(self,
-            lr=1.,
-            max_iters=500,
-            stem_iters=200,
-            tol=10 ** (-4),
-            window=3,
-            chains=1,
-            warm_up=5,
-            jump_std="default",
-            jump_change=.01,
-            target_rate=.23,
-            gain_decay=1.,
-            corr_update="gd",
+            lr=None,
+            max_iters=None,
+            stem_iters=None,
+            tol=None,
+            window=None,
+            chains=None,
+            warm_up=None,
+            jump_std=None,
+            jump_change=None,
+            target_rate=None,
+            gain_decay=None,
+            corr_update=None,
             batch_size=None,
-            batch_shuffle=None,
+            cycling=None,
             verbose=None,
             key=None,
             params=None,
             masks=None):
-        if jump_std == "default":
+        if isinstance(lr, type(None)):
+            lr = 1.
+        if isinstance(max_iters, type(None)):
+            max_iters = 500
+        if isinstance(stem_iters, type(None)):
+            stem_iters = 200
+        if isinstance(window, type(None)):
+            window = 3
+        if isinstance(chains, type(None)):
+            chains = 1
+        if isinstance(warm_up, type(None)):
+            warm_up = 5
+        if isinstance(jump_std, type(None)):
             jump_std = 2.4 / jnp.sqrt(self.info["n_factors"])
+        if isinstance(jump_change, type(None)):
+            jump_change = .01
+        if isinstance(target_rate, type(None)):
+            target_rate = .23
+        if isinstance(gain_decay, type(None)):
+            gain_decay = 1.0
+        if isinstance(corr_update, type(None)):
+            corr_update = "gd"
         if isinstance(verbose, type(None)):
             verbose = self.verbose
         if isinstance(key, type(None)):
@@ -221,7 +241,7 @@ class Ordinal(Base):
             gain_decay=gain_decay,
             corr_update=corr_update,
             batch_size=batch_size,
-            batch_shuffle=batch_shuffle,
+            cycling=cycling,
             verbose=verbose,
             key=key,
             params=params,

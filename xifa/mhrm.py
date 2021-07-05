@@ -9,6 +9,7 @@ from tqdm.auto import tqdm
 from .utils import cal_multinomial_logpmf
 
 
+
 @partial(jit, static_argnums=(4,))
 def cal_closs2d_i(
         params, y, eta2d, freq, crf):
@@ -287,7 +288,7 @@ def fit_mhrm(
         gain_decay,
         corr_update,
         batch_size,
-        batch_shuffle,
+        cycling,
         verbose,
         key,
         params,
@@ -305,8 +306,8 @@ def fit_mhrm(
         batch_slices = [
             slice(batch_size * i, min(batch_size * (i + 1), n_cases), 1) for i in range(n_batches)]
         whole_idx = jnp.arange(n_cases)
-        if isinstance(batch_shuffle, type(None)):
-            batch_shuffle = True
+        if isinstance(cycling, type(None)):
+            cycling = True
     aparams = {key: jnp.zeros(value.shape) for key, value in params.items()}
     trace = {"accept_rate": [], "closs": [], "change_param": []}
     stage = 1
@@ -338,11 +339,28 @@ def fit_mhrm(
         else:
             sum_freq = freq.sum()
             accept_rate = jnp.zeros(())
-            if batch_shuffle:
-                key, subkey = jax.random.split(key)
-                whole_idx = jax.random.permutation(subkey, whole_idx)
-            for batch_slice in batch_slices:
-                batch_idx = whole_idx[batch_slice]
+            key, subkey = jax.random.split(key)
+            whole_idx = jax.random.permutation(subkey, whole_idx)
+            if cycling:
+                for batch_slice in batch_slices:
+                    batch_idx = whole_idx[batch_slice]
+                    y_batch, eta3d_batch, freq_batch = y[batch_idx, ...], eta3d[:, batch_idx, :], freq[batch_idx]
+                    key, subkey = jax.random.split(key)
+                    eta3d_batch, accept_rate_batch = conduct_mcmc(
+                        subkey, warm_up, jump_std,
+                        eta3d_batch, y_batch, freq_batch, params, crf)
+                    dparams = cal_dcloss3d(
+                        params, y_batch, eta3d_batch, freq_batch, crf)
+                    params = update_params(
+                        lr, gain,
+                        stage, corr_update,
+                        params, dparams, masks,
+                        eta3d_batch, freq_batch)
+                    accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
+                    eta3d = jax.ops.index_update(
+                        eta3d, jax.ops.index[:, batch_idx, :], eta3d_batch)
+            else:
+                batch_idx = whole_idx[batch_slices[0]]
                 y_batch, eta3d_batch, freq_batch = y[batch_idx, ...], eta3d[:, batch_idx, :], freq[batch_idx]
                 key, subkey = jax.random.split(key)
                 eta3d_batch, accept_rate_batch = conduct_mcmc(
@@ -355,7 +373,7 @@ def fit_mhrm(
                     stage, corr_update,
                     params, dparams, masks,
                     eta3d_batch, freq_batch)
-                accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
+                accept_rate = accept_rate_batch
                 eta3d = jax.ops.index_update(
                     eta3d, jax.ops.index[:, batch_idx, :], eta3d_batch)
         eta3d = eta3d / jnp.sqrt(params["corr"].diagonal())

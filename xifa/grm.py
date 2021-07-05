@@ -47,7 +47,7 @@ class GRM(Ordinal):
             (4) `trace['jump_std']` is a `list` storing values of jumping standard deviations used in Metropolis-Hasting sampling.
             (5) `trace['n_iters']` is a `float` for the number of iterations.
             (6) `trace['is_converged']` is a `bool` to indicate whether the algorithm is converged.
-            (7) `trace['is_converged']` is a `bool` to indicate whether the algorithm results in NaN values.
+            (7) `trace['is_nan']` is a `bool` to indicate whether the algorithm results in NaN values.
             (8) `trace['fit_time']` is a `float` for the fitting time.
             `trace` is only available after using `fit()` method.
         eta (jax.numpy.ndarray):

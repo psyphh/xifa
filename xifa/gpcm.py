@@ -70,7 +70,7 @@ class GPCM(Ordinal):
             key=None):
 
         """__init__ Method for GPCM Class
-        
+
         Args:
             data (numpy.ndarray-like):
                 A 2D array with shape `(n_cases, n_items)` to specify data for IFA.

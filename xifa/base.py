@@ -200,6 +200,8 @@ class Ordinal(Base):
             max_iters = 500
         if isinstance(stem_iters, type(None)):
             stem_iters = 200
+        if isinstance(tol, type(None)):
+            tol = 10**(-4)
         if isinstance(window, type(None)):
             window = 3
         if isinstance(chains, type(None)):

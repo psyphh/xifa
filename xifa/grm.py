@@ -137,52 +137,52 @@ class GRM(Ordinal):
             masks=None):
         """Fit Method for GRM Class
         Args:
-            lr (float):
+            lr (float, optional):
                 A `float` for learning rate (or) step size for gradient descent.
                 By default, `lr` is `1.0`.
-            max_iters (int):
+            max_iters (int, optional):
                 An `int` for the maximal number of iterations.
                 By default, `max_iters` is `500`.
-            stem_iters (int):
+            stem_iters (int, optional):
                 An `int` for the number of iterations for the stochastic expectation-maximization (StEM) algorithm.
                 StEM is used in the first stage of fitting.
                 Note that `stem_iters` is also considered in `max_iters`.
                 By default, `stem_iters` is `200`.
-            tol (float):
+            tol (float, optional):
                 A `float` for the convergence criterion in the second stage of fitting.
                 The second stage stops when the maximal value of changes in parameters is smaller than `tol` within window size defined in `window`.
                 By default, `tol` is `10**(-4)`.
-            window (int):
+            window (int, optional):
                 An `int` for the window size to check convergence.
                 By default, `window` is `10**(-3)`.
-            chains (int):
+            chains (int, optional):
                 An `int` to specify how many independent chains are used in Metropolis-Hasting sampling.
                 By default, `chains` is `1`.
-            warm_up (int):
+            warm_up (int, optional):
                 An `int` for the number of warm-up iterations in Metropolis-Hasting sampling.
                 In other words, only the `warm_up`(th) sample is considered as a valid Metropolis-Hasting sample.
                 By default, `warm_up` is `5`.
-            jump_std (float):
+            jump_std (float, optional):
                 A `float` for the jumping standard deviation for Metropolis-Hasting sampling.
                 By default, `jump_std` is set as `2.4 /sqrt(n_factors)`.
-            jump_change (float):
+            jump_change (float, optional):
                 A `float` to specify the change value for adaptive `jump_std`.
                 By default, `jump_change` is `.01`.
-            target_rate (float):
+            target_rate (float, optional):
                 A `float` for optimal value of acceptance rate for Metropolis-Hasting sampling.
                 By default, `target_rate` is `.23`.
-            gain_decay (float):
+            gain_decay (float, optional):
                 A `float` to specify the decay level of gain in Robins-Monro update.
                 The gain is calculated by `gain = 1 / (n_iters**gain_decay)`.
                 By default, `gain_decay` is `1.0`.
-            corr_update (str):
+            corr_update (str, optional):
                 A `str` to specify the method for updating correlation matrix of latent factors.
                 Its value must be one of `['gd', 'gd_ls', 'empirical']`.
                 By default, `corr_update` is `gd`.
-            batch_size (int):
+            batch_size (int, optional):
                 An `int` to specify the batch size if mini-batch stochastic gradient descent is used.
                 By default, `batch_size` is `n_cases` which result in usual gradient descent method.
-            cycling (bool):
+            cycling (bool, optional):
                 A `bool` to specify whether we should cycle batches over the whole data set.
                 By default, `cycling` is `True`.
             verbose (bool, optional):

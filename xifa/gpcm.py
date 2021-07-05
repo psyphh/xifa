@@ -70,6 +70,7 @@ class GPCM(Ordinal):
             key=None):
 
         """__init__ Method for GPCM Class
+        
         Args:
             data (numpy.ndarray-like):
                 A 2D array with shape `(n_cases, n_items)` to specify data for IFA.
@@ -132,6 +133,7 @@ class GPCM(Ordinal):
             params=None,
             masks=None):
         """Fit Method for GPCM Class
+
         Args:
             lr (float, optional):
                 A `float` for learning rate (or) step size for gradient descent.

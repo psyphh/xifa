@@ -74,6 +74,7 @@ class GRM(Ordinal):
             verbose=None,
             key=None):
         """__init__ Method for GRM Class
+
         Args:
             data (numpy.ndarray-like):
                 A 2D array with shape `(n_cases, n_items)` to specify data for IFA.
@@ -136,6 +137,7 @@ class GRM(Ordinal):
             params=None,
             masks=None):
         """Fit Method for GRM Class
+
         Args:
             lr (float, optional):
                 A `float` for learning rate (or) step size for gradient descent.

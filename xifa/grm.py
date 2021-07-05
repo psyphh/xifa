@@ -43,7 +43,8 @@ class GRM(Ordinal):
             `trace` is only available after using `fit()` method.
         eta (jax.numpy.ndarray):
             A 2D array with shape `(n_cases, n_factors)` for predicted `eta` values .
-            The values of `eta` elements are calculated by averaging values of MH samples across chains.
+            The values of `eta` elements are calculated by averaging values of MH samples across `chains` specified in `fit()`.
+            Therefore, it is not appropriate to directly use `eta` when `chains` is small.
             `eta` is only available after using `fit()` method.
         aparams (list):
             A `list` for averaged model parameter matrices.

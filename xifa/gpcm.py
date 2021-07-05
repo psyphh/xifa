@@ -131,7 +131,7 @@ class GPCM(Ordinal):
             key=None,
             params=None,
             masks=None):
-        """Fit Method for GRM Class
+        """Fit Method for GPCM Class
         Args:
             lr (float):
                 A `float` for learning rate (or) step size for gradient descent.

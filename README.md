@@ -16,7 +16,7 @@ For a large-scale application, please see the [IPIP 300 Items Example (v2)](http
 + graded response model (GRM; [Semejima, 1969](https://link.springer.com/article/10.1007%2FBF03372160))
 + generalized partial credit model (GPCM; [Muraki, 1992](https://doi.org/10.1177/014662169201600206)). 
 
-The analysis can be either *exploratory* or *confirmatory*. In addition, the vectorized algorithm is also designed to handle the presence of 
+The analysis can be either *exploratory* or *confirmatory*. In addition, the vectorized algorithm is able to handle the presence of 
 + missing responses (`numpy.nan`)
 + unequal category items (`>0.1.5`)
 

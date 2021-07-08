@@ -5,7 +5,7 @@
 
 `xifa` is build on [`jax`](https://github.com/google/jax), a package for Autograd and XLA (accelerated linear algebra). Hence, `xifa` can run IFA on GPUs and TPUs to hugely speed up the training process. That is why we call it *Accelerated IFA*.
 
-`xifa` implements a vectorized Metropolis-Hastings Robbins-Monro (MH-RM) algorithm to calculate a marginal maximum likelihood (MML) estimate. MH-RM is one of the states-of-art algorithms for high dimensional IFA ([Cai, 2010](https://doi.org/10.1007/s11336-009-9136-x.)). The vectorized version is designed for parallel computing with GPUs of TPUs. The vectorized MH-RM includes two stages. The first stage updates the parameter estimate by a stochastic expectation-maximization (StEM) algorithm. The second stage conducts stochastic approximation (SA) to refine the estimate.
+To calculate a marginal maximum likelihood (MML) estimate, `xifa` implements a vectorized version of Metropolis-Hastings Robbins-Monro (MH-RM) algorithm  ([Cai, 2010](https://doi.org/10.1007/s11336-009-9136-x.)). The vectorized algorithm is designed for parallel computing with GPUs of TPUs. The vectorized MH-RM includes two stages: the first stage updates the parameter estimate by a stochastic expectation-maximization (StEM) algorithm and the second stage conducts stochastic approximation (SA) to iteratively refine the estimate.
 
 For a tutorial, please see the [IPIP 50 Items Example](https://github.com/psyphh/xifa/blob/master/examples/ipip50.ipynb).
 

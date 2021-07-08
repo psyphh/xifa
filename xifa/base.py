@@ -5,7 +5,6 @@ from .mhrm import fit_mhrm
 from .utils import cal_p12
 
 
-
 class Base():
     def __init__(self,
                  data, n_factors,
@@ -18,14 +17,21 @@ class Base():
             data = jnp.array(data)
         n_cases = data.shape[0]
         n_items = data.shape[1]
-        n_cats = int(jnp.nanmax(data) + 1)
+        ns_cats = list(jnp.nanmax(data, axis=0).astype("int") + 1)
+        max_cats = max(ns_cats)
         dtype = data.dtype
         y = jax.nn.one_hot(
-            data, n_cats, dtype=dtype)
+            x=data,
+            num_classes=max_cats,
+            dtype=dtype)
         del data
+        if min(ns_cats) == max_cats:
+            cats = "equal"
+        else:
+            cats = "unequal"
         if isinstance(patterns, type(None)):
             analysis = "exploratory"
-            pattern = {"loading": None, "corr": None}
+            patterns = {"loading": None, "corr": None}
         else:
             analysis = "confirmatory"
             if "loading" not in patterns:
@@ -60,16 +66,17 @@ class Base():
         stats = {"p1": p1, "p2": p2}
         info = {"n_cases": n_cases,
                 "n_items": n_items,
-                "n_cats": n_cats,
                 "n_factors": n_factors,
+                "ns_cats": ns_cats,
+                "max_cats": max_cats,
                 "analysis": analysis,
                 "patterns": patterns,
+                "cats": cats,
                 "dtype": dtype}
         self.y, self.freq = y, freq
         self.info = info
         self.stats = stats
         self.key, self.verbose = key, verbose
-
 
     def print_init(self):
         if self.verbose:
@@ -80,7 +87,10 @@ class Base():
             print(" + Number of Cases: %.0f" % (self.info["n_cases"]))
             print(" + Number of Items: %.0f" % (self.info["n_items"]))
             print(" + Number of Factors: %.0f" % (self.info["n_factors"]))
-            print(" + Number of Categories: %.0f" % (self.info["n_cats"]))
+            if self.info["cats"] == "equal":
+                print(" + Number of Categories: %.0f" % (self.info["max_cats"]))
+            else:
+                print(" + Number of Categories: %.0f-%.0f" % (min(self.info["ns_cats"]), self.info["max_cats"]))
 
 
 class Ordinal(Base):
@@ -146,8 +156,8 @@ class Ordinal(Base):
         self.params = {}
 
         def init_loading(p1, p2, n_factors):
-            n_cats = p1.shape[1]
-            k = jnp.arange(n_cats)
+            max_cats = p1.shape[1]
+            k = jnp.arange(max_cats)
             m1 = jnp.sum(p1 * k, axis=1)
             m2 = jnp.sum(p2 * jnp.outer(k, k)[None, :, None, :], axis=(1, 3))
             s = m2 - jnp.outer(m1, m1)
@@ -174,7 +184,6 @@ class Ordinal(Base):
         eta = (eta - eta.mean(axis=0)) / eta.std(axis=0)
         self.eta = eta
 
-
     def fit(self,
             lr=None,
             max_iters=None,
@@ -182,7 +191,7 @@ class Ordinal(Base):
             tol=None,
             window=None,
             chains=None,
-            warm_up=None,
+            warmup=None,
             jump_std=None,
             jump_change=None,
             target_rate=None,
@@ -201,13 +210,13 @@ class Ordinal(Base):
         if isinstance(stem_iters, type(None)):
             stem_iters = 200
         if isinstance(tol, type(None)):
-            tol = 10**(-4)
+            tol = 10 ** (-4)
         if isinstance(window, type(None)):
             window = 3
         if isinstance(chains, type(None)):
             chains = 1
-        if isinstance(warm_up, type(None)):
-            warm_up = 5
+        if isinstance(warmup, type(None)):
+            warmup = 5
         if isinstance(jump_std, type(None)):
             jump_std = 2.4 / jnp.sqrt(self.info["n_factors"])
         if isinstance(jump_change, type(None)):
@@ -236,7 +245,7 @@ class Ordinal(Base):
             tol=tol,
             window=window,
             chains=chains,
-            warm_up=warm_up,
+            warmup=warmup,
             jump_std=jump_std,
             jump_change=jump_change,
             target_rate=target_rate,
@@ -258,20 +267,90 @@ class Ordinal(Base):
         self.trace = trace
         if verbose:
             if self.trace["is_nan"]:
-                print("`NaN` Occurs after %.0f Iterations (%3.2f sec)." % (
-                        self.trace["n_iters"], self.trace["fit_time"]))
+                print("`NaN` Occurs after %.0f Iterations (%.2f sec)." % (
+                    self.trace["n_iters"], self.trace["fit_time"]))
                 print("Possible Solutions Include:")
                 print("+ Try Other `key`.")
                 print("+ Try Smaller `lr`.")
                 print("+ Set `corr_update='empirical'`.")
             else:
                 if self.trace["is_converged"]:
-                    print("Converged after %.0f Iterations (%3.2f sec)." % (
+                    print("Converged after %.0f Iterations (%.2f sec)." % (
                         self.trace["n_iters"], self.trace["fit_time"]))
                 else:
-                    print("Not Converged after %.0f Iterations (%3.2f sec)." % (
+                    print("Not Converged after %.0f Iterations (%.2f sec)." % (
                         self.trace["n_iters"], self.trace["fit_time"]))
                     print("Possible Solutions Include:")
                     print("+ Try Larger `max_iters`.")
                     print("+ Try Larger `chains`.")
         return self
+
+    def transform(
+            self,
+            data=None,
+            chains=None,
+            warmup=None,
+            jump_std=None,
+            batch_size=None,
+            verbose=None,
+            key=None):
+        params = self.params
+        crf = self.crf
+        if isinstance(data, type(None)):
+            y, freq, eta = self.y, self.freq, self.eta
+            n_cases = y.shape[0]
+        else:
+            if not isinstance(data, type(jnp.array)):
+                data = jnp.array(data)
+            y = jax.nn.one_hot(
+                x=data,
+                num_classes=self.info["max_cats"],
+                dtype=self.info["dtype"])
+            n_cases = y.shape[0]
+            del data
+            freq = jnp.full(
+                shape=(n_cases,),
+                fill_value=1.,
+                dtype=self.info["dtype"])
+            eta = y.argmax(axis=-1) @ params["loading"]
+            eta = (eta - eta.mean(axis=0)) / eta.std(axis=0)
+        if isinstance(chains, type(None)):
+            chains = 100
+        if isinstance(warmup, type(None)):
+            warmup = 100
+        if isinstance(jump_std, type(None)):
+            jump_std = self.trace["jump_std"]
+        if isinstance(verbose, type(None)):
+            verbose = self.verbose
+        if isinstance(key, type(None)):
+            key = self.key
+        key, subkey = jax.random.split(key)
+        eta3d = jnp.repeat(eta[None, ...], chains, axis=0)
+        if isinstance(batch_size, type(None)):
+            eta3d, accept_rate = conduct_mcmc(
+                subkey, warmup, jump_std,
+                eta3d, y, freq, params, crf)
+        else:
+            n_batches = int(jnp.ceil(n_cases / batch_size))
+            batch_slices = [
+                slice(batch_size * i, min(batch_size * (i + 1), n_cases), 1) for i in range(n_batches)]
+            sum_freq = freq.sum()
+            accept_rate = jnp.zeros(())
+            key, subkey = jax.random.split(key)
+            for batch_slice in batch_slices:
+                y_batch, eta3d_batch, freq_batch = y[batch_slice, ...], eta3d[:, batch_slice, :], freq[batch_slice]
+                key, subkey = jax.random.split(key)
+                eta3d_batch, accept_rate_batch = conduct_mcmc(
+                    subkey, warmup, jump_std,
+                    eta3d_batch, y_batch, freq_batch, params, crf)
+                accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
+                eta3d = jax.ops.index_update(
+                    eta3d, jax.ops.index[:, batch_slice, :], eta3d_batch)
+        eta = jnp.mean(eta3d, axis=0)
+        if verbose:
+            print("Data are Transformed to Factor Scores by EAP.")
+            print("+ Number of Cases: %.0f" % (n_cases))
+            print("+ Number of Chains: %.0f" % (chains))
+            print("+ Number of Warm-Up: %.0f" % (warmup))
+            print("+ Accept Rate: %.3f" % (accept_rate))
+        return eta

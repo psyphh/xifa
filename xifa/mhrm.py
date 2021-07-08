@@ -163,7 +163,7 @@ def update_timers(
 
 @partial(jit, static_argnums=(7,))
 def conduct_mcmc(
-        key, warm_up, jump_std,
+        key, warmup, jump_std,
         eta3d, y, freq, params, crf):
     accept_rate = 0
     n_factors = eta3d.shape[-1]
@@ -174,7 +174,7 @@ def conduct_mcmc(
         eta3d_new = jax.random.multivariate_normal(
             key=subkey,
             mean=eta3d,
-            cov=jnp.diag(jnp.repeat(jump_std ** 2, n_factors)),
+            cov=jnp.diag(jnp.repeat(jump_std**2, n_factors)),
             shape=eta3d.shape[:-1])
         ratio = jnp.exp(
             - cal_closs3d_i(params, y, eta3d_new, freq, crf) + cal_closs3d_i(params, y, eta3d, freq, crf))
@@ -193,7 +193,7 @@ def conduct_mcmc(
         return key, eta3d, accept_rate
 
     key, eta3d, accept_rate = jax.lax.fori_loop(
-        0, warm_up + 1, sample_eta3d, (key, eta3d, accept_rate))
+        0, warmup + 1, sample_eta3d, (key, eta3d, accept_rate))
     return eta3d, accept_rate
 
 
@@ -281,7 +281,7 @@ def fit_mhrm(
         tol,
         window,
         chains,
-        warm_up,
+        warmup,
         jump_std,
         jump_change,
         target_rate,
@@ -300,7 +300,6 @@ def fit_mhrm(
     start = time.time()
     eta3d = jnp.repeat(eta[None, ...], 1, axis=0)
     if not isinstance(batch_size, type(None)):
-        key, subkey = jax.random.split(key)
         n_cases = y.shape[0]
         n_batches = int(jnp.ceil(n_cases / batch_size))
         batch_slices = [
@@ -327,7 +326,7 @@ def fit_mhrm(
         if isinstance(batch_size, type(None)):
             key, subkey = jax.random.split(key)
             eta3d, accept_rate = conduct_mcmc(
-                subkey, warm_up, jump_std,
+                subkey, warmup, jump_std,
                 eta3d, y, freq, params, crf)
             dparams = cal_dcloss3d(
                 params, y, eta3d, freq, crf)
@@ -347,7 +346,7 @@ def fit_mhrm(
                     y_batch, eta3d_batch, freq_batch = y[batch_idx, ...], eta3d[:, batch_idx, :], freq[batch_idx]
                     key, subkey = jax.random.split(key)
                     eta3d_batch, accept_rate_batch = conduct_mcmc(
-                        subkey, warm_up, jump_std,
+                        subkey, warmup, jump_std,
                         eta3d_batch, y_batch, freq_batch, params, crf)
                     dparams = cal_dcloss3d(
                         params, y_batch, eta3d_batch, freq_batch, crf)
@@ -364,7 +363,7 @@ def fit_mhrm(
                 y_batch, eta3d_batch, freq_batch = y[batch_idx, ...], eta3d[:, batch_idx, :], freq[batch_idx]
                 key, subkey = jax.random.split(key)
                 eta3d_batch, accept_rate_batch = conduct_mcmc(
-                    subkey, warm_up, jump_std,
+                    subkey, warmup, jump_std,
                     eta3d_batch, y_batch, freq_batch, params, crf)
                 dparams = cal_dcloss3d(
                     params, y_batch, eta3d_batch, freq_batch, crf)

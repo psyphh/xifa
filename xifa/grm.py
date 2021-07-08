@@ -14,7 +14,7 @@ class GRM(Ordinal):
 
     Attributes:
         y (jax.numpy.ndarray):
-            A 3D array with shape `(n_cases, n_item, n_cats)` to represent one-hot encoding data for IFA.
+            A 3D array with shape `(n_cases, n_item, max_cats)` to represent one-hot encoding data for IFA.
         freq (jax.numpy.ndarray):
             A 1D array with shape `(n_cases,)` to represent frequencies for rows of data.
         verbose (bool):
@@ -28,7 +28,7 @@ class GRM(Ordinal):
         params (list):
             A `list` for model parameter matrices.
             `params` includes three parameter arrays:
-            (1) `params[`intercept`]` is an intercept matrix with shape `(n_items, n_cats + 1)`;
+            (1) `params[`intercept`]` is an intercept matrix with shape `(n_items, max_cats + 1)`;
             (2) `params[`loading`]` is a loading matrix with shape `(n_items, n_factors)`;
             (3) `params[`corr`]` is a correlation matrix with shape `(n_factors, n_factors)`.
         masks (list):
@@ -59,7 +59,7 @@ class GRM(Ordinal):
             A `list` for averaged model parameter matrices.
             The averaging is with respect to all iterations in the stochastic approximation stage.
             `aparams` includes three parameter arrays:
-            (1) `aparams['intercept']` is an intercept matrix with shape `(n_items, n_cats + 1)`;
+            (1) `aparams['intercept']` is an intercept matrix with shape `(n_items, max_cats + 1)`;
             (2) `aparams['loading']` is a loading matrix with shape `(n_items, n_factors)`;
             (3) `aparams['corr']` is a correlation matrix with shape `(n_factors, n_factors)`.
             `aparams` is only available after using `fit()` method.
@@ -77,9 +77,9 @@ class GRM(Ordinal):
 
         Args:
             data (numpy.ndarray-like):
-                A 2D array with shape `(n_cases, n_items)` to specify data for IFA.
-                Its element must be a floating point with value from 0 to `n_cats` - 1,
-                where `n_cats` is the number of categories.
+                A float 2D array with shape `(n_cases, n_items)` to specify data for IFA.
+                Its element must be a floating point with value from 0 to `max_cats` - 1,
+                where `max_cats` is the maximal number of categories among items.
                 A missing value must be represented by `jax.numpy.nan` or `numpy.nan`.
             n_factors (int):
                 An `int` to specify the number of factors in IFA.
@@ -124,7 +124,7 @@ class GRM(Ordinal):
             tol=None,
             window=None,
             chains=None,
-            warm_up=None,
+            warmup=None,
             jump_std=None,
             jump_change=None,
             target_rate=None,
@@ -158,12 +158,13 @@ class GRM(Ordinal):
                 An `int` for the window size to check convergence.
                 By default, `window` is `10**(-3)`.
             chains (int, optional):
-                An `int` to specify how many independent chains are used in Metropolis-Hasting sampling.
+                An `int` to specify how many independent chains are established in Metropolis-Hasting sampling.
+                The last sample of each chain will be used to construct the complete-data likelihood.
                 By default, `chains` is `1`.
-            warm_up (int, optional):
+            warmup (int, optional):
                 An `int` for the number of warm-up iterations in Metropolis-Hasting sampling.
-                In other words, only the `warm_up`(th) sample is considered as a valid Metropolis-Hasting sample.
-                By default, `warm_up` is `5`.
+                In other words, only the `warmup`(th) sample is considered as a valid Metropolis-Hasting sample.
+                By default, `warmup` is `5`.
             jump_std (float, optional):
                 A `float` for the jumping standard deviation for Metropolis-Hasting sampling.
                 By default, `jump_std` is set as `2.4 /sqrt(n_factors)`.
@@ -204,7 +205,7 @@ class GRM(Ordinal):
             tol=tol,
             window=window,
             chains=chains,
-            warm_up=warm_up,
+            warmup=warmup,
             jump_std=jump_std,
             jump_change=jump_change,
             target_rate=target_rate,
@@ -237,25 +238,53 @@ class GRM(Ordinal):
                 dtype=self.info["dtype"]),
                 jnp.full(
                     shape=(self.info["n_items"],
-                           self.info["n_cats"] - 1),
+                           self.info["max_cats"] - 1),
                     fill_value=1.,
                     dtype=self.info["dtype"]),
                 jnp.full(
                     shape=(self.info["n_items"], 1),
                     fill_value=0.,
                     dtype=self.info["dtype"])])
+        if self.info["cats"] == "unequal":
+            row_idx = []
+            col_idx = []
+            for i, n_cats in enumerate(self.info["ns_cats"]):
+                for j in range(n_cats, self.info["max_cats"] + 1):
+                    row_idx.append(i)
+                    col_idx.append(j)
+            self.masks["intercept"] = jax.ops.index_update(
+                x=self.masks["intercept"],
+                idx=(row_idx, col_idx),
+                y=0.)
 
     def init_params(self):
         def init_intercept(p1):
             n_items = p1.shape[0]
             intercept = jnp.hstack(
-                [jnp.full((n_items, 1), -jnp.inf),
+                [jnp.full(
+                    shape=(n_items, 1),
+                    fill_value=-jnp.inf,
+                    dtype=self.info["dtype"]),
                  jax.scipy.special.logit(
                      jnp.cumsum(p1, axis=1)[:, :-1]),
-                 jnp.full((n_items, 1), jnp.inf)])
+                 jnp.full(
+                     shape=(n_items, 1),
+                     fill_value=jnp.inf,
+                     dtype=self.info["dtype"])])
             return intercept
 
         super().init_params()
         self.params["intercept"] = init_intercept(
             self.stats["p1"])
         del self.stats
+        if self.info["cats"] == "unequal":
+            row_idx = []
+            col_idx = []
+            for i, n_cats in enumerate(self.info["ns_cats"]):
+                for j in range(n_cats, self.info["max_cats"] + 1):
+                    row_idx.append(i)
+                    col_idx.append(j)
+            self.params["intercept"] = jax.ops.index_update(
+                x=self.params["intercept"],
+                idx=(row_idx, col_idx),
+                y=jnp.inf)

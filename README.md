@@ -17,8 +17,8 @@ For a large-scale application, please see the [IPIP 300 Items Example (v2)](http
 + generalized partial credit model (GPCM; [Muraki, 1992](https://doi.org/10.1177/014662169201600206)). 
 
 The analysis can be either *exploratory* or *confirmatory*. In addition, the vectorized algorithm is able to handle the presence of 
-+ missing responses (`numpy.nan`)
-+ unequal category items (`>0.1.5`)
++ missing responses
++ unequal category items
 
 Features in statistical inference (e.g., goodness-of-fit statistics, parameter standard errors, etc.) are still under development.
 

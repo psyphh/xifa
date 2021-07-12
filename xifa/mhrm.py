@@ -163,7 +163,7 @@ def update_timers(
 
 @partial(jit, static_argnums=(7,))
 def conduct_mcmc(
-        key, warmup, jump_std,
+        key, n_warmups, jump_std,
         eta3d, y, freq, params, crf):
     accept_rate = 0
     n_factors = eta3d.shape[-1]
@@ -193,7 +193,7 @@ def conduct_mcmc(
         return key, eta3d, accept_rate
 
     key, eta3d, accept_rate = jax.lax.fori_loop(
-        0, warmup + 1, sample_eta3d, (key, eta3d, accept_rate))
+        0, n_warmups + 1, sample_eta3d, (key, eta3d, accept_rate))
     return eta3d, accept_rate
 
 
@@ -279,9 +279,9 @@ def fit_mhrm(
         max_iters,
         stem_iters,
         tol,
-        window,
-        chains,
-        warmup,
+        window_size,
+        n_chains,
+        n_warmups,
         jump_std,
         jump_change,
         target_rate,
@@ -318,7 +318,7 @@ def fit_mhrm(
     for n_iters in range(1, max_iters + 1):
         if n_iters == stem_iters + 1:
             stage = 2
-            eta3d = jnp.repeat(eta3d, chains, axis=0)
+            eta3d = jnp.repeat(eta3d, n_chains, axis=0)
         if stage == 2:
             sa_count = (n_iters - stem_iters)
             gain = 1. / (sa_count ** gain_decay)
@@ -326,7 +326,7 @@ def fit_mhrm(
         if isinstance(batch_size, type(None)):
             key, subkey = jax.random.split(key)
             eta3d, accept_rate = conduct_mcmc(
-                subkey, warmup, jump_std,
+                subkey, n_warmups, jump_std,
                 eta3d, y, freq, params, crf)
             dparams = cal_dcloss3d(
                 params, y, eta3d, freq, crf)
@@ -346,7 +346,7 @@ def fit_mhrm(
                     y_batch, eta3d_batch, freq_batch = y[batch_idx, ...], eta3d[:, batch_idx, :], freq[batch_idx]
                     key, subkey = jax.random.split(key)
                     eta3d_batch, accept_rate_batch = conduct_mcmc(
-                        subkey, warmup, jump_std,
+                        subkey, n_warmups, jump_std,
                         eta3d_batch, y_batch, freq_batch, params, crf)
                     dparams = cal_dcloss3d(
                         params, y_batch, eta3d_batch, freq_batch, crf)
@@ -363,7 +363,7 @@ def fit_mhrm(
                 y_batch, eta3d_batch, freq_batch = y[batch_idx, ...], eta3d[:, batch_idx, :], freq[batch_idx]
                 key, subkey = jax.random.split(key)
                 eta3d_batch, accept_rate_batch = conduct_mcmc(
-                    subkey, warmup, jump_std,
+                    subkey, n_warmups, jump_std,
                     eta3d_batch, y_batch, freq_batch, params, crf)
                 dparams = cal_dcloss3d(
                     params, y_batch, eta3d_batch, freq_batch, crf)
@@ -397,7 +397,7 @@ def fit_mhrm(
         else:
             aparams = {key: ((sa_count - 1.) / sa_count) * aparams[key] + (1. / sa_count) * params[key]
                        for key in aparams.keys()}
-            if max(trace["change_param"][-window:]) < tol:
+            if max(trace["change_param"][-window_size:]) < tol:
                 is_converged = True
                 break
     end = time.time()

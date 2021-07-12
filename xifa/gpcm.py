@@ -14,7 +14,7 @@ class GPCM(Ordinal):
 
      Attributes:
          y (jax.numpy.ndarray):
-             A 3D array with shape `(n_cases, n_item, max_cats)` to represent one-hot encoding data for IFA.
+             A 3D array with shape `(n_cases, n_items, max_cats)` to represent one-hot encoding data for IFA.
          freq (jax.numpy.ndarray):
              A 1D array with shape `(n_cases,)` to represent frequencies for rows of data.
          verbose (bool):
@@ -52,8 +52,8 @@ class GPCM(Ordinal):
              `trace` is only available after using `fit()` method.
          eta (jax.numpy.ndarray):
              A 2D array with shape `(n_cases, n_factors)` for predicted `eta` values .
-             The values of `eta` elements are calculated by averaging values of Metropolis-Hasting samples across `chains` specified in `fit()`.
-             Therefore, it is not appropriate to directly use `eta` when `chains` is small.
+             The values of `eta` elements are calculated by averaging values of Metropolis-Hasting samples across `n_chains` specified in `fit()`.
+             Therefore, it is not appropriate to directly use `eta` when `n_chains` is small.
              `eta` is only available after using `fit()` method.
          aparams (list):
              A `list` for averaged model parameter matrices.
@@ -66,7 +66,8 @@ class GPCM(Ordinal):
      """
     def __init__(
             self,
-            data, n_factors,
+            data,
+            n_factors,
             patterns=None,
             freq=None,
             init_frac=None,
@@ -122,9 +123,9 @@ class GPCM(Ordinal):
             max_iters=None,
             stem_iters=None,
             tol=None,
-            window=None,
-            chains=None,
-            warmup=None,
+            window_size=None,
+            n_chains=None,
+            n_warmups=None,
             jump_std=None,
             jump_change=None,
             target_rate=None,
@@ -152,19 +153,19 @@ class GPCM(Ordinal):
                 By default, `stem_iters` is `200`.
             tol (float, optional):
                 A `float` for the convergence criterion in the second stage of fitting.
-                The second stage stops when the maximal value of changes in parameters is smaller than `tol` within window size defined in `window`.
+                The second stage stops when the maximal value of changes in parameters is smaller than `tol` within window size defined in `window_size`.
                 By default, `tol` is `10**(-4)`.
-            window (int, optional):
+            window_size (int, optional):
                 An `int` for the window size to check convergence.
-                By default, `window` is `10**(-3)`.
-            chains (int, optional):
+                By default, `window_size` is `10**(-3)`.
+            n_chains (int, optional):
                 An `int` to specify how many independent chains are established in Metropolis-Hasting sampling.
                 The last sample of each chain will be used to construct the complete-data likelihood.
-                By default, `chains` is `1`.
-            warmup (int, optional):
+                By default, `n_chains` is `1`.
+            n_warmups (int, optional):
                 An `int` for the number of warm-up iterations in Metropolis-Hasting sampling.
-                In other words, only the `warmup`(th) sample is considered as a valid Metropolis-Hasting sample.
-                By default, `warmup` is `5`.
+                In other words, only the `n_warmups`(th) sample is considered as a valid Metropolis-Hasting sample.
+                By default, `n_warmups` is `5`.
             jump_std (float, optional):
                 A `float` for the jumping standard deviation for Metropolis-Hasting sampling.
                 By default, `jump_std` is set as `2.4 /sqrt(n_factors)`.
@@ -202,9 +203,9 @@ class GPCM(Ordinal):
                     max_iters=max_iters,
                     stem_iters=stem_iters,
                     tol=tol,
-                    window=window,
-                    chains=chains,
-                    warmup=warmup,
+                    window_size=window_size,
+                    n_chains=n_chains,
+                    n_warmups=n_warmups,
                     jump_std=jump_std,
                     jump_change=jump_change,
                     target_rate=target_rate,

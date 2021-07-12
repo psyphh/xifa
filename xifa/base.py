@@ -7,7 +7,8 @@ from .utils import cal_p12
 
 class Base():
     def __init__(self,
-                 data, n_factors,
+                 data,
+                 n_factors,
                  patterns=None,
                  freq=None,
                  init_frac=None,
@@ -189,9 +190,9 @@ class Ordinal(Base):
             max_iters=None,
             stem_iters=None,
             tol=None,
-            window=None,
-            chains=None,
-            warmup=None,
+            window_size=None,
+            n_chains=None,
+            n_warmups=None,
             jump_std=None,
             jump_change=None,
             target_rate=None,
@@ -211,12 +212,12 @@ class Ordinal(Base):
             stem_iters = 200
         if isinstance(tol, type(None)):
             tol = 10 ** (-4)
-        if isinstance(window, type(None)):
-            window = 3
-        if isinstance(chains, type(None)):
-            chains = 1
-        if isinstance(warmup, type(None)):
-            warmup = 5
+        if isinstance(window_size, type(None)):
+            window_size = 3
+        if isinstance(n_chains, type(None)):
+            n_chains = 1
+        if isinstance(n_warmups, type(None)):
+            n_warmups = 5
         if isinstance(jump_std, type(None)):
             jump_std = 2.4 / jnp.sqrt(self.info["n_factors"])
         if isinstance(jump_change, type(None)):
@@ -243,9 +244,9 @@ class Ordinal(Base):
             max_iters=max_iters,
             stem_iters=stem_iters,
             tol=tol,
-            window=window,
-            chains=chains,
-            warmup=warmup,
+            window_size=window_size,
+            n_chains=n_chains,
+            n_warmups=n_warmups,
             jump_std=jump_std,
             jump_change=jump_change,
             target_rate=target_rate,
@@ -282,14 +283,14 @@ class Ordinal(Base):
                         self.trace["n_iters"], self.trace["fit_time"]))
                     print("Possible Solutions Include:")
                     print("+ Try Larger `max_iters`.")
-                    print("+ Try Larger `chains`.")
+                    print("+ Try Larger `n_chains`.")
         return self
 
     def transform(
             self,
             data=None,
-            chains=None,
-            warmup=None,
+            n_chains=None,
+            n_warmups=None,
             jump_std=None,
             batch_size=None,
             verbose=None,
@@ -314,10 +315,10 @@ class Ordinal(Base):
                 dtype=self.info["dtype"])
             eta = y.argmax(axis=-1) @ params["loading"]
             eta = (eta - eta.mean(axis=0)) / eta.std(axis=0)
-        if isinstance(chains, type(None)):
-            chains = 100
-        if isinstance(warmup, type(None)):
-            warmup = 100
+        if isinstance(n_chains, type(None)):
+            n_chains = 100
+        if isinstance(n_warmups, type(None)):
+            n_warmups = 100
         if isinstance(jump_std, type(None)):
             jump_std = self.trace["jump_std"]
         if isinstance(verbose, type(None)):
@@ -325,10 +326,10 @@ class Ordinal(Base):
         if isinstance(key, type(None)):
             key = self.key
         key, subkey = jax.random.split(key)
-        eta3d = jnp.repeat(eta[None, ...], chains, axis=0)
+        eta3d = jnp.repeat(eta[None, ...], n_chains, axis=0)
         if isinstance(batch_size, type(None)):
             eta3d, accept_rate = conduct_mcmc(
-                subkey, warmup, jump_std,
+                subkey, n_warmups, jump_std,
                 eta3d, y, freq, params, crf)
         else:
             n_batches = int(jnp.ceil(n_cases / batch_size))
@@ -341,7 +342,7 @@ class Ordinal(Base):
                 y_batch, eta3d_batch, freq_batch = y[batch_slice, ...], eta3d[:, batch_slice, :], freq[batch_slice]
                 key, subkey = jax.random.split(key)
                 eta3d_batch, accept_rate_batch = conduct_mcmc(
-                    subkey, warmup, jump_std,
+                    subkey, n_warmups, jump_std,
                     eta3d_batch, y_batch, freq_batch, params, crf)
                 accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
                 eta3d = jax.ops.index_update(
@@ -350,7 +351,7 @@ class Ordinal(Base):
         if verbose:
             print("Data are Transformed to Factor Scores by EAP.")
             print("+ Number of Cases: %.0f" % (n_cases))
-            print("+ Number of Chains: %.0f" % (chains))
-            print("+ Number of Warm-Up: %.0f" % (warmup))
+            print("+ Number of Chains: %.0f" % (n_chains))
+            print("+ Number of Warm-Up: %.0f" % (n_warmups))
             print("+ Accept Rate: %.3f" % (accept_rate))
         return eta

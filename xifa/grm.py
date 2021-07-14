@@ -147,12 +147,12 @@ class GRM(Ordinal):
             max_iters (int, optional):
                 An `int` to specify the maximal number of iterations for the fitting process, that is,
                 the sum of expectation-maximization (StEM) steps and stochastic approximation (SA) steps.
-                By default, `max_iters` is `600`.
+                By default, `max_iters` is `700`.
             stem_steps (int, optional):
                 An `int` for the number of steps for the stochastic expectation-maximization (StEM) algorithm.
                 StEM is used in the first stage of fitting.
                 Note that `stem_steps` is also counted in `max_iters`.
-                By default, `stem_steps` is `100`.
+                By default, `stem_steps` is `200`.
             warmup_steps (int, optional):
                 An `int` for the number of steps for the warmup steps when intializing MCMC sampling.
                 By default, `warmup_steps` is `150`.

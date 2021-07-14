@@ -326,7 +326,7 @@ class Ordinal(Base):
         if isinstance(n_chains, type(None)):
             n_chains = 100
         if isinstance(n_warmups, type(None)):
-            n_warmups = 100
+            n_warmups = 20
         if isinstance(jump_std, type(None)):
             jump_std = self.trace["jump_std"][-1]
         if isinstance(verbose, type(None)):

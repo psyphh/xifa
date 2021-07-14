@@ -55,9 +55,8 @@ class Base():
         if isinstance(init_frac, type(None)):
             p1, p2 = cal_p12(y, freq)
         else:
-            key, subkey = jax.random.split(key)
             init_idx = jax.random.choice(
-                key=subkey,
+                key=key,
                 a=n_cases,
                 shape=(int(n_cases * init_frac),),
                 replace=False)
@@ -175,7 +174,11 @@ class Ordinal(Base):
                 self.info["n_factors"])
         else:
             self.params["loading"] = jax.random.uniform(
-                self.key, self.masks["loading"].shape) * self.masks["loading"]
+                key=self.key,
+                shape=self.masks["loading"].shape,
+                dtype=self.info["dtype"],
+                minval=0.5,
+                maxval=1.0) * self.masks["loading"]
         self.params["corr"] = jnp.eye(
             self.info["n_factors"],
             dtype=self.info["dtype"])
@@ -185,10 +188,12 @@ class Ordinal(Base):
         eta = (eta - eta.mean(axis=0)) / eta.std(axis=0)
         self.eta = eta
 
-    def fit(self,
+    def fit(
+            self,
             lr=None,
             max_iters=None,
-            stem_iters=None,
+            stem_steps=None,
+            warmup_steps=None,
             tol=None,
             window_size=None,
             n_chains=None,
@@ -199,7 +204,6 @@ class Ordinal(Base):
             gain_decay=None,
             corr_update=None,
             batch_size=None,
-            cycling=None,
             verbose=None,
             key=None,
             params=None,
@@ -207,9 +211,11 @@ class Ordinal(Base):
         if isinstance(lr, type(None)):
             lr = 1.
         if isinstance(max_iters, type(None)):
-            max_iters = 500
-        if isinstance(stem_iters, type(None)):
-            stem_iters = 200
+            max_iters = 600
+        if isinstance(stem_steps, type(None)):
+            stem_steps = 100
+        if isinstance(warmup_steps, type(None)):
+            warmup_steps = 150
         if isinstance(tol, type(None)):
             tol = 10 ** (-4)
         if isinstance(window_size, type(None)):
@@ -223,7 +229,7 @@ class Ordinal(Base):
         if isinstance(jump_change, type(None)):
             jump_change = .01
         if isinstance(target_rate, type(None)):
-            target_rate = .23
+            target_rate = (5 - min(n_factors, 5)) / 4 * 0.44 + (min(n_factors, 5) - 1) / 4 * .23
         if isinstance(gain_decay, type(None)):
             gain_decay = 1.0
         if isinstance(corr_update, type(None)):
@@ -239,10 +245,13 @@ class Ordinal(Base):
         y, freq = self.y, self.freq
         eta = self.eta
         crf = self.crf
+        if verbose:
+            print("Fitting Process is Started.")
         params, aparams, eta, trace = fit_mhrm(
             lr=lr,
             max_iters=max_iters,
-            stem_iters=stem_iters,
+            stem_steps=stem_steps,
+            warmup_steps=warmup_steps,
             tol=tol,
             window_size=window_size,
             n_chains=n_chains,
@@ -253,7 +262,6 @@ class Ordinal(Base):
             gain_decay=gain_decay,
             corr_update=corr_update,
             batch_size=batch_size,
-            cycling=cycling,
             verbose=verbose,
             key=key,
             params=params,
@@ -320,16 +328,18 @@ class Ordinal(Base):
         if isinstance(n_warmups, type(None)):
             n_warmups = 100
         if isinstance(jump_std, type(None)):
-            jump_std = self.trace["jump_std"]
+            jump_std = self.trace["jump_std"][-1]
         if isinstance(verbose, type(None)):
             verbose = self.verbose
         if isinstance(key, type(None)):
             key = self.key
         key, subkey = jax.random.split(key)
         eta3d = jnp.repeat(eta[None, ...], n_chains, axis=0)
+        jump_change, target_rate = 0, 0
         if isinstance(batch_size, type(None)):
-            eta3d, accept_rate = conduct_mcmc(
-                subkey, n_warmups, jump_std,
+            eta3d, accept_rate, jump_std = conduct_mcmc(
+                subkey, n_warmups,
+                jump_std, jump_change, target_rate,
                 eta3d, y, freq, params, crf)
         else:
             n_batches = int(jnp.ceil(n_cases / batch_size))
@@ -341,8 +351,9 @@ class Ordinal(Base):
             for batch_slice in batch_slices:
                 y_batch, eta3d_batch, freq_batch = y[batch_slice, ...], eta3d[:, batch_slice, :], freq[batch_slice]
                 key, subkey = jax.random.split(key)
-                eta3d_batch, accept_rate_batch = conduct_mcmc(
-                    subkey, n_warmups, jump_std,
+                eta3d_batch, accept_rate_batch, jump_std = conduct_mcmc(
+                    subkey, n_warmups,
+                    jump_std, jump_change, target_rate,
                     eta3d_batch, y_batch, freq_batch, params, crf)
                 accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
                 eta3d = jax.ops.index_update(
@@ -355,3 +366,51 @@ class Ordinal(Base):
             print("+ Number of Warm-Up: %.0f" % (n_warmups))
             print("+ Accept Rate: %.3f" % (accept_rate))
         return eta
+
+    def loglik(self,
+               n_points=None,
+               batch_size=None,
+               verbose=None,
+               key=None):
+        if isinstance(n_points, type(None)):
+            n_points = 5000
+        if isinstance(verbose, type(None)):
+            verbose = self.verbose
+        if isinstance(key, type(None)):
+            key = self.key
+        n_cases, n_factors = self.info["n_cases"], self.info["n_factors"]
+        y, freq = self.y, self.freq
+        params = self.params
+        crf = self.crf
+        points = jax.random.multivariate_normal(
+            key=key,
+            mean=jnp.zeros(
+                shape=(n_factors,)),
+            cov=params["corr"],
+            shape=(n_points,))
+        if isinstance(n_points, type(None)):
+            loglik = jnp.sum(
+                jnp.log(
+                    jnp.mean(
+                        jnp.prod(
+                            crf(points, params) ** y[:, jnp.newaxis, ...],
+                            axis=(-1, -2)),
+                        axis=-1)) * freq) / freq.sum()
+        else:
+            n_batches = int(jnp.ceil(n_cases / batch_size))
+            batch_slices = [
+                slice(batch_size * i, min(batch_size * (i + 1), n_cases), 1) for i in range(n_batches)]
+            sum_freq = freq.sum()
+            loglik = jnp.zeros(())
+            for batch_slice in batch_slices:
+                y_batch, freq_batch = y[batch_slice, ...], freq[batch_slice]
+                sum_freq_batch = freq_batch.sum()
+                loglik_batch = jnp.sum(
+                    jnp.log(
+                        jnp.mean(
+                            jnp.prod(
+                                crf(points, params) ** y_batch[:, jnp.newaxis, ...],
+                                axis=(-1, -2)),
+                            axis=-1)) * freq_batch) / sum_freq_batch
+                loglik = loglik + (sum_freq_batch / sum_freq) * loglik_batch
+        return loglik

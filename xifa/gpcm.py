@@ -9,6 +9,8 @@ from jax import jit
 from .base import Ordinal
 
 
+
+
 class GPCM(Ordinal):
     """A Class for Fitting Generalized Partial Credit Models (GPCMs)
 
@@ -43,8 +45,8 @@ class GPCM(Ordinal):
              `trace` includes eight elements:
              (1) `trace['accept_rate']` is a `list` storing acceptance rates in Metropolis-Hasting sampling.
              (2) `trace['closs']` is a `list` storing complete data loss values (negative complete data log-likelihood).
-             (3) `trace['change_param']` is a float for the maximal change in parameters.
-             (4) `trace['jump_std']` is a `list` storing values of jumping standard deviations used in Metropolis-Hasting sampling.
+             (3) `trace['change_params']` is a float for the maximal change in parameters.
+             (4) `trace['jump_std']` is a `list` storing values of jumping standard deviations used in MCMC sampling.
              (5) `trace['n_iters']` is a `float` for the number of iterations.
              (6) `trace['is_converged']` is a `bool` to indicate whether the algorithm is converged.
              (7) `trace['is_nan']` is a `bool` to indicate whether the algorithm results in NaN values.
@@ -121,7 +123,8 @@ class GPCM(Ordinal):
     def fit(self,
             lr=None,
             max_iters=None,
-            stem_iters=None,
+            stem_steps=None,
+            warmup_steps=None,
             tol=None,
             window_size=None,
             n_chains=None,
@@ -132,76 +135,83 @@ class GPCM(Ordinal):
             gain_decay=None,
             corr_update=None,
             batch_size=None,
-            cycling=None,
             verbose=None,
             key=None,
             params=None,
             masks=None):
         """Fit Method for GPCM Class
 
-        Args:
+       Args:
             lr (float, optional):
-                A `float` for learning rate (or) step size for gradient descent.
+                A `float` for learning rate (or step size) for gradient descent.
                 By default, `lr` is `1.0`.
             max_iters (int, optional):
-                An `int` for the maximal number of iterations.
-                By default, `max_iters` is `500`.
-            stem_iters (int, optional):
-                An `int` for the number of iterations for the stochastic expectation-maximization (StEM) algorithm.
+                An `int` to specify the maximal number of iterations for the fitting process, that is,
+                the sum of expectation-maximization (StEM) steps and stochastic approximation (SA) steps.
+                By default, `max_iters` is `600`.
+            stem_steps (int, optional):
+                An `int` for the number of steps for the stochastic expectation-maximization (StEM) algorithm.
                 StEM is used in the first stage of fitting.
-                Note that `stem_iters` is also considered in `max_iters`.
-                By default, `stem_iters` is `200`.
+                Note that `stem_steps` is also counted in `max_iters`.
+                By default, `stem_steps` is `100`.
+            warmup_steps (int, optional):
+                An `int` for the number of steps for the warmup steps when intializing MCMC sampling.
+                By default, `warmup_steps` is `150`.
             tol (float, optional):
-                A `float` for the convergence criterion in the second stage of fitting.
-                The second stage stops when the maximal value of changes in parameters is smaller than `tol` within window size defined in `window_size`.
+                A `float` to specify the tolerance for checking the convergence of stochastic approximation (SA) stage.
+                SA is the second stage of fitting.
+                The SA stage stops when the maximal value of changes in parameters is smaller than `tol` within window size defined in `window_size`.
                 By default, `tol` is `10**(-4)`.
             window_size (int, optional):
                 An `int` for the window size to check convergence.
-                By default, `window_size` is `10**(-3)`.
+                By default, `window_size` is `3`.
             n_chains (int, optional):
-                An `int` to specify how many independent chains are established in Metropolis-Hasting sampling.
+                An `int` to specify how many independent chains are established in MCMC sampling.
                 The last sample of each chain will be used to construct the complete-data likelihood.
+                In other words, the complete-data likelihood is approximated by `n_chains` samples for each case.
                 By default, `n_chains` is `1`.
             n_warmups (int, optional):
-                An `int` for the number of warm-up iterations in Metropolis-Hasting sampling.
-                In other words, only the `n_warmups`(th) sample is considered as a valid Metropolis-Hasting sample.
+                An `int` to specify the number of warmup iterations when conducting MCMC in each iteration.
+                In other words, the `n_warmups+1`(th) sample is considered as a valid MCMC sample.
                 By default, `n_warmups` is `5`.
             jump_std (float, optional):
                 A `float` for the jumping standard deviation for Metropolis-Hasting sampling.
-                By default, `jump_std` is set as `2.4 /sqrt(n_factors)`.
+                By default, `jump_std` is set as `2.4/sqrt(n_factors)`.
             jump_change (float, optional):
                 A `float` to specify the change value for adaptive `jump_std`.
+                Setting `jump_change=0` implies a fixed `jump_std`.
                 By default, `jump_change` is `.01`.
             target_rate (float, optional):
-                A `float` for optimal value of acceptance rate for Metropolis-Hasting sampling.
-                By default, `target_rate` is `.23`.
+                A `float` to specify an optimal value of acceptance rate for Metropolis-Hasting sampling.
+                By default, `target_rate` is `(5-min(n_factors,5))/4*0.44+(min(n_factors,5)-1)/4*.23`.
             gain_decay (float, optional):
-                A `float` to specify the decay level of gain in Robins-Monro update.
-                The gain is calculated by `gain = 1 / (n_iters**gain_decay)`.
+                A `float` to specify the decay level of gain in stochastic approximation update.
+                The gain is calculated by `gain = 1 / ((n_iters - stem_steps)**gain_decay)`,
+                where `n_iters` is the number of current iteration.
                 By default, `gain_decay` is `1.0`.
             corr_update (str, optional):
                 A `str` to specify the method for updating correlation matrix of latent factors.
-                Its value must be one of `['gd', 'gd_ls', 'empirical']`.
+                Its value must be one of `['gd', 'gd_bls', 'empirical']`.
+                Here, `gd` is for gradient descent,
+                `gd_bls` is for gradient descent with backtracking line search,
+                and `empirical` is for empirical covariance calculated by MCMC samples.
                 By default, `corr_update` is `gd`.
             batch_size (int, optional):
                 An `int` to specify the batch size if mini-batch stochastic gradient descent is used.
-                By default, `batch_size` is `n_cases` which result in usual gradient descent method.
-            cycling (bool, optional):
-                A `bool` to specify whether we should cycle batches over the whole data set.
-                By default, `cycling` is `True`.
+                If `batch_size=n_cases`, it results in usual gradient descent method.
+                By default, `batch_size` is `n_cases`.
             verbose (bool, optional):
                 A `bool` to specify whether fitting summary and progress bar should be printed after successful initialization.
                 By default, `verbose` is the value specified in `__init__()`.
             key (numpy.ndarray-like, optional):
                 A pseudorandom number generator (PRNG) key for random number generation.
                 It can be generated by using `jax.random.PRNGKey(seed)`, where seed is an integer.
-                In the initialization stage, `key` is only used if `init_frac` is specified.
-                However, `key` will be largely used in `fit()` method (`key` can be also specified as an argument of `fit()`).
-                By default, `key`  is the value specified in `__init__()`.
+                By default, `key`  is the value yielded by `__init__()`.
         """
         super().fit(lr=lr,
                     max_iters=max_iters,
-                    stem_iters=stem_iters,
+                    stem_steps=stem_steps,
+                    warmup_steps=warmup_steps,
                     tol=tol,
                     window_size=window_size,
                     n_chains=n_chains,
@@ -212,7 +222,6 @@ class GPCM(Ordinal):
                     gain_decay=gain_decay,
                     corr_update=corr_update,
                     batch_size=batch_size,
-                    cycling=cycling,
                     verbose=verbose,
                     key=key,
                     params=params,

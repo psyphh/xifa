@@ -229,7 +229,7 @@ class Ordinal(Base):
         if isinstance(jump_change, type(None)):
             jump_change = .01
         if isinstance(target_rate, type(None)):
-            target_rate = (5 - min(n_factors, 5)) / 4 * 0.44 + (min(n_factors, 5) - 1) / 4 * .23
+            target_rate = (5 - min(self.info["n_factors"], 5)) / 4 * 0.44 + (min(self.info["n_factors"], 5) - 1) / 4 * .23
         if isinstance(gain_decay, type(None)):
             gain_decay = 1.0
         if isinstance(corr_update, type(None)):

@@ -211,9 +211,9 @@ class Ordinal(Base):
         if isinstance(lr, type(None)):
             lr = 1.
         if isinstance(max_iters, type(None)):
-            max_iters = 600
+            max_iters = 700
         if isinstance(stem_steps, type(None)):
-            stem_steps = 100
+            stem_steps = 200
         if isinstance(warmup_steps, type(None)):
             warmup_steps = 150
         if isinstance(tol, type(None)):

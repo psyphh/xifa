@@ -11,6 +11,8 @@ from .utils import cal_multinomial_logpmf
 
 
 
+
+
 @partial(jit, static_argnums=(4,))
 def cal_closs2d_i(
         params, y, eta2d, freq, crf):

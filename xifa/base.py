@@ -297,8 +297,8 @@ class Ordinal(Base):
     def transform(
             self,
             data=None,
+            warmup_steps=None,
             n_chains=None,
-            n_warmups=None,
             jump_std=None,
             batch_size=None,
             verbose=None,
@@ -323,10 +323,10 @@ class Ordinal(Base):
                 dtype=self.info["dtype"])
             eta = y.argmax(axis=-1) @ params["loading"]
             eta = (eta - eta.mean(axis=0)) / eta.std(axis=0)
+        if isinstance(warmup_steps, type(None)):
+            warmup_steps = 20
         if isinstance(n_chains, type(None)):
             n_chains = 100
-        if isinstance(n_warmups, type(None)):
-            n_warmups = 20
         if isinstance(jump_std, type(None)):
             jump_std = self.trace["jump_std"][-1]
         if isinstance(verbose, type(None)):
@@ -338,7 +338,7 @@ class Ordinal(Base):
         jump_change, target_rate = 0, 0
         if isinstance(batch_size, type(None)):
             eta3d, accept_rate, jump_std = conduct_mcmc(
-                subkey, n_warmups,
+                subkey, warmup_steps,
                 jump_std, jump_change, target_rate,
                 eta3d, y, freq, params, crf)
         else:
@@ -352,7 +352,7 @@ class Ordinal(Base):
                 y_batch, eta3d_batch, freq_batch = y[batch_slice, ...], eta3d[:, batch_slice, :], freq[batch_slice]
                 key, subkey = jax.random.split(key)
                 eta3d_batch, accept_rate_batch, jump_std = conduct_mcmc(
-                    subkey, n_warmups,
+                    subkey, warmup_steps,
                     jump_std, jump_change, target_rate,
                     eta3d_batch, y_batch, freq_batch, params, crf)
                 accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
@@ -360,10 +360,9 @@ class Ordinal(Base):
                     eta3d, jax.ops.index[:, batch_slice, :], eta3d_batch)
         eta = jnp.mean(eta3d, axis=0)
         if verbose:
-            print("Data are Transformed to Factor Scores by EAP.")
-            print("+ Number of Cases: %.0f" % (n_cases))
+            print("Data are Transformed to Factor Scores.")
             print("+ Number of Chains: %.0f" % (n_chains))
-            print("+ Number of Warm-Up: %.0f" % (n_warmups))
+            print("+ Number of Warmup Steps: %.0f" % (warmup_steps))
             print("+ Accept Rate: %.3f" % (accept_rate))
         return eta
 
@@ -388,7 +387,7 @@ class Ordinal(Base):
                 shape=(n_factors,)),
             cov=params["corr"],
             shape=(n_points,))
-        if isinstance(n_points, type(None)):
+        if isinstance(batch_size, type(None)):
             loglik = jnp.sum(
                 jnp.log(
                     jnp.mean(
@@ -413,4 +412,6 @@ class Ordinal(Base):
                                 axis=(-1, -2)),
                             axis=-1)) * freq_batch) / sum_freq_batch
                 loglik = loglik + (sum_freq_batch / sum_freq) * loglik_batch
+        if verbose:
+            print("Log-Likelihood is Calculated (%.0f Quadrature Points)." % (n_points) )
         return loglik

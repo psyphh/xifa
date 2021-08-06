@@ -369,10 +369,13 @@ class Ordinal(Base):
     def loglik(self,
                n_points=None,
                batch_size=None,
+               individual=None,
                verbose=None,
                key=None):
         if isinstance(n_points, type(None)):
             n_points = 5000
+        if isinstance(individual, type(None)):
+            individual = False
         if isinstance(verbose, type(None)):
             verbose = self.verbose
         if isinstance(key, type(None)):
@@ -388,30 +391,38 @@ class Ordinal(Base):
             cov=params["corr"],
             shape=(n_points,))
         if isinstance(batch_size, type(None)):
-            loglik = jnp.sum(
-                jnp.log(
+            loglik_i = jnp.log(
                     jnp.mean(
                         jnp.prod(
                             crf(points, params) ** y[:, jnp.newaxis, ...],
                             axis=(-1, -2)),
-                        axis=-1)) * freq) / freq.sum()
+                        axis=-1))
+            loglik = jnp.sum(
+                 loglik_i * freq) / freq.sum()
         else:
             n_batches = int(jnp.ceil(n_cases / batch_size))
             batch_slices = [
                 slice(batch_size * i, min(batch_size * (i + 1), n_cases), 1) for i in range(n_batches)]
             sum_freq = freq.sum()
+            loglik_i = []
             loglik = jnp.zeros(())
             for batch_slice in batch_slices:
                 y_batch, freq_batch = y[batch_slice, ...], freq[batch_slice]
                 sum_freq_batch = freq_batch.sum()
-                loglik_batch = jnp.sum(
-                    jnp.log(
+                loglik_i_batch = jnp.log(
                         jnp.mean(
                             jnp.prod(
                                 crf(points, params) ** y_batch[:, jnp.newaxis, ...],
                                 axis=(-1, -2)),
-                            axis=-1)) * freq_batch) / sum_freq_batch
+                            axis=-1))
+                loglik_i.append(loglik_i_batch)
+                loglik_batch = jnp.sum(
+                    loglik_i_batch * freq_batch) / sum_freq_batch
                 loglik = loglik + (sum_freq_batch / sum_freq) * loglik_batch
         if verbose:
             print("Log-Likelihood is Calculated (%.0f Quadrature Points)." % (n_points) )
-        return loglik
+        if individual:
+            loglik_i = jnp.hstack(loglik_i)
+            return loglik, loglik_i
+        else:
+            return loglik

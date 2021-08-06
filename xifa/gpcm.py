@@ -233,7 +233,7 @@ class GPCM(Ordinal):
             max_cats = params["intercept"].shape[1]
             logit = (eta @ params["loading"].T)[..., None] * jnp.arange(max_cats) + jnp.cumsum(params["intercept"], axis=1)
             cr_prob = jnp.exp(logit)
-            cr_prob = cr_prob / jnp.sum(cr_prob, axis=2)[..., None]
+            cr_prob = cr_prob / jnp.sum(cr_prob, axis=-1)[..., None]
             return cr_prob
 
         self.crf = crf

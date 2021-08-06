@@ -9,7 +9,7 @@ To calculate a marginal maximum likelihood (MML) estimate, `xifa` implements a v
 
 For a tutorial, please see the [IPIP 50 Items Example](https://github.com/psyphh/xifa/blob/master/examples/ipip50.ipynb).
 
-For a large-scale application, please see the [IPIP 300 Items Example (v2)](https://github.com/psyphh/xifa/blob/master/examples/ipip300v2.ipynb). In this example, `xifa` could finish the training process within 15 minutes for an IFA model with 300 items and 30 factors under a dataset with 307,313 cases.
+For a large-scale application, please see the [IPIP 300 Items Example (v2)](https://github.com/psyphh/xifa/blob/master/examples/ipip300v2.ipynb). 
 
 ## Features in `xifa`
 `xifa` supports ordinal data IFA with 

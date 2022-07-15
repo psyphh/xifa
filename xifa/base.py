@@ -115,12 +115,13 @@ class Ordinal(Base):
                     for value in values:
                         row_idx.append(value)
                         col_idx.append(key)
-                self.masks["loading"] = jax.ops.index_update(
-                    jnp.zeros(
+                self.masks["loading"] = jnp.zeros(
                         (self.info["n_items"],
                          self.info["n_factors"]),
-                        dtype=self.info["dtype"]),
-                    (row_idx, col_idx), 1.)
+                        dtype=self.info["dtype"])
+                self.masks["loading"] = self.masks[
+                    "loading"].at[(row_idx, col_idx)].set(1.)
+
         if self.info["analysis"] == "exploratory":
             self.masks["corr"] = jnp.zeros(
                 (self.info["n_factors"],
@@ -145,12 +146,13 @@ class Ordinal(Base):
                             col_idx.append(key)
                             col_idx.append(value)
                             row_idx.append(key)
-                self.masks["corr"] = jax.ops.index_update(
-                    jnp.zeros(
+                self.masks["corr"] = jnp.zeros(
                         (self.info["n_factors"],
                          self.info["n_factors"]),
-                        dtype=self.info["dtype"]),
-                    (row_idx, col_idx), 1.)
+                        dtype=self.info["dtype"])
+                self.masks["corr"] = self.masks[
+                    "corr"].at[(row_idx, col_idx)].set(1.)
+
 
     def init_params(self):
         self.params = {}
@@ -356,8 +358,8 @@ class Ordinal(Base):
                     jump_std, jump_change, target_rate,
                     eta3d_batch, y_batch, freq_batch, params, crf)
                 accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
-                eta3d = jax.ops.index_update(
-                    eta3d, jax.ops.index[:, batch_slice, :], eta3d_batch)
+                eta3d = eta3d.at[:, batch_slice, :] = eta3d_batch
+
         eta = jnp.mean(eta3d, axis=0)
         if verbose:
             print("Data are Transformed to Factor Scores.")

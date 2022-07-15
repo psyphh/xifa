@@ -334,8 +334,8 @@ def fit_mhrm(
                 jump_std, jump_change, target_rate,
                 eta3d_batch, y_batch, freq_batch, params, crf)
             accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
-            eta3d = jax.ops.index_update(
-                eta3d, jax.ops.index[:, batch_idx, :], eta3d_batch)
+            eta3d = eta3d.at[:, batch_idx, :].set(eta3d_batch)
+
     if verbose:
         timer1, timer2 = set_timers(max_iters, stem_steps)
     for n_iters in range(1, max_iters + 1):
@@ -381,8 +381,8 @@ def fit_mhrm(
                     params, dparams, masks,
                     eta3d_batch, freq_batch)
                 accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
-                eta3d = jax.ops.index_update(
-                    eta3d, jax.ops.index[:, batch_idx, :], eta3d_batch)
+                eta3d = eta3d.at[:, batch_idx, :] = eta3d_batch
+
         eta3d = eta3d / jnp.sqrt(params["corr"].diagonal())
         closs = cal_closs3d(params, y, eta3d, freq, crf)
         dparams = {key: params[key] - temp[key] for key in params.keys()}

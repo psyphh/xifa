@@ -257,10 +257,9 @@ class GPCM(Ordinal):
                 for j in range(n_cats, self.info["max_cats"]):
                     row_idx.append(i)
                     col_idx.append(j)
-            self.masks["intercept"] = jax.ops.index_update(
-                x=self.masks["intercept"],
-                idx=(row_idx, col_idx),
-                y=0.)
+            self.masks["intercept"] = self.masks[
+                "intercept"].at[
+                (row_idx, col_idx)].set(0.)
 
     def init_params(self):
         def init_intercept(p1):
@@ -287,7 +286,6 @@ class GPCM(Ordinal):
                 for j in range(n_cats, self.info["max_cats"]):
                     row_idx.append(i)
                     col_idx.append(j)
-            self.params["intercept"] = jax.ops.index_update(
-                x=self.params["intercept"],
-                idx=(row_idx, col_idx),
-                y=-jnp.inf)
+            self.params["intercept"] = self.params[
+                "intercept"].at[
+                (row_idx, col_idx)].set(-jnp.inf)

@@ -293,7 +293,6 @@ class GRM(Ordinal):
                 for j in range(n_cats, self.info["max_cats"] + 1):
                     row_idx.append(i)
                     col_idx.append(j)
-            self.params["intercept"] = jax.ops.index_update(
-                x=self.params["intercept"],
-                idx=(row_idx, col_idx),
-                y=jnp.inf)
+            self.params["intercept"] = self.params[
+                "intercept"].at[(row_idx, col_idx)].set(jnp.inf)
+

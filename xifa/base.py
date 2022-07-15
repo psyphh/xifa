@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 
-from .mhrm import fit_mhrm
+from .mhrm import fit_mhrm, conduct_mcmc
 from .utils import cal_p12
 
 

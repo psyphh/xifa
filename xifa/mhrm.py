@@ -381,7 +381,7 @@ def fit_mhrm(
                     params, dparams, masks,
                     eta3d_batch, freq_batch)
                 accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
-                eta3d = eta3d.at[:, batch_idx, :] = eta3d_batch
+                eta3d = eta3d.at[:, batch_idx, :].set(eta3d_batch)
 
         eta3d = eta3d / jnp.sqrt(params["corr"].diagonal())
         closs = cal_closs3d(params, y, eta3d, freq, crf)

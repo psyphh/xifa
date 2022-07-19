@@ -358,7 +358,7 @@ class Ordinal(Base):
                     jump_std, jump_change, target_rate,
                     eta3d_batch, y_batch, freq_batch, params, crf)
                 accept_rate = accept_rate + (freq_batch.sum() / sum_freq) * accept_rate_batch
-                eta3d = eta3d.at[:, batch_slice, :] = eta3d_batch
+                eta3d = eta3d.at[:, batch_slice, :].set(eta3d_batch)
 
         eta = jnp.mean(eta3d, axis=0)
         if verbose:
